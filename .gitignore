@@ -1,0 +1,47 @@
+# local agent/runtime state
+/.codex/
+/.omx/
+/AGENTS.md
+/PROJECT_MEMORY.md
+/CHANGE.md
+/todo_list.md
+
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# testing
+coverage/
+test-results/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+dist/
+
+# misc
+.DS_Store
+*.pem
+*.sqlite
+*.sqlite-*
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env
+.env*
+!.env.example
+
+# typescript
+*.tsbuildinfo
+
+# go build artifacts
+/backend/server
+backend/*.exe

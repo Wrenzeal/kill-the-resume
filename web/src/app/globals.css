@@ -1,0 +1,287 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "KTR Paper Sans";
+  src: url("/fonts/ktr-paper-sans.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KTR Paper Sans";
+  src: url("/fonts/ktr-paper-sans-bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KTR Paper Mono";
+  src: url("/fonts/ktr-paper-mono.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KTR Paper Mono";
+  src: url("/fonts/ktr-paper-mono-bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KTR Paper CJK";
+  src: url("/fonts/ktr-paper-cjk.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+:root {
+  --background: #0d1117;
+  --foreground: #e6edf3;
+  --console-panel: #111821;
+  --console-panel-strong: #0a0f14;
+  --console-line: rgba(86, 255, 163, 0.18);
+  --console-line-hot: rgba(57, 255, 136, 0.7);
+  --cyber-green: #39ff88;
+  --warning-orange: #ff8a3d;
+  --trace-cyan: #58e6ff;
+  --muted-steel: #7d8b99;
+  --paper: #ffffff;
+  --scrollbar-track: rgba(7, 11, 16, 0.68);
+  --scrollbar-rail: rgba(88, 230, 255, 0.12);
+  --scrollbar-thumb: rgba(88, 230, 255, 0.34);
+  --scrollbar-thumb-hot: rgba(57, 255, 136, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(57, 255, 136, 0.26);
+  color: #f7fff9;
+}
+
+.tactical-scrollbar,
+.tactical-input:where(textarea) {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.tactical-scrollbar::-webkit-scrollbar,
+.tactical-input:where(textarea)::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.tactical-scrollbar::-webkit-scrollbar-track,
+.tactical-input:where(textarea)::-webkit-scrollbar-track {
+  border-left: 1px solid rgba(88, 230, 255, 0.06);
+  background:
+    linear-gradient(180deg, transparent 0 18%, var(--scrollbar-rail) 18% 82%, transparent 82% 100%),
+    var(--scrollbar-track);
+}
+
+.tactical-scrollbar::-webkit-scrollbar-thumb,
+.tactical-input:where(textarea)::-webkit-scrollbar-thumb {
+  min-height: 2.8rem;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(88, 230, 255, 0.7), rgba(57, 255, 136, 0.64), rgba(255, 138, 61, 0.42))
+      padding-box;
+  box-shadow:
+    inset 0 0 0 1px rgba(7, 11, 16, 0.76),
+    0 0 10px rgba(88, 230, 255, 0.12);
+}
+
+.tactical-scrollbar::-webkit-scrollbar-thumb:hover,
+.tactical-input:where(textarea)::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(88, 230, 255, 0.88), var(--scrollbar-thumb-hot), rgba(255, 138, 61, 0.68))
+      padding-box;
+  box-shadow:
+    inset 0 0 0 1px rgba(7, 11, 16, 0.72),
+    0 0 16px rgba(57, 255, 136, 0.24);
+}
+
+.tactical-scrollbar::-webkit-scrollbar-corner,
+.tactical-input:where(textarea)::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.tactical-grid {
+  background:
+    linear-gradient(rgba(88, 230, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 230, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 12% 0%, rgba(57, 255, 136, 0.12), transparent 26rem),
+    radial-gradient(circle at 100% 30%, rgba(255, 138, 61, 0.1), transparent 32rem),
+    #0d1117;
+  background-size: 24px 24px, 24px 24px, auto, auto, auto;
+}
+
+.tactical-panel {
+  border: 1px solid rgba(125, 139, 153, 0.22);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 33, 0.94), rgba(7, 11, 16, 0.94)),
+    var(--console-panel);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.tactical-field {
+  position: relative;
+  border: 1px solid rgba(125, 139, 153, 0.24);
+  background: rgba(7, 11, 16, 0.82);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.tactical-field::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: -1px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(57, 255, 136, 0.9), rgba(88, 230, 255, 0.75), transparent);
+  background-repeat: no-repeat;
+  background-size: 220% 100%;
+  transition: opacity 160ms ease;
+  will-change: background-position, opacity;
+  z-index: 0;
+}
+
+.tactical-field:focus-within {
+  border-color: rgba(57, 255, 136, 0.68);
+  background: rgba(7, 14, 14, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(57, 255, 136, 0.18),
+    0 0 26px rgba(57, 255, 136, 0.13),
+    inset 0 0 18px rgba(57, 255, 136, 0.035);
+}
+
+.tactical-field:focus-within::before {
+  opacity: 1;
+  animation: neon-sweep 1.75s linear infinite;
+}
+
+.tactical-input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: #ecfff5;
+  outline: none;
+}
+
+.tactical-input::placeholder {
+  color: rgba(125, 139, 153, 0.68);
+}
+
+.tactical-input:focus-visible {
+  outline: none;
+}
+
+.scanline::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(57, 255, 136, 0.055), transparent);
+  transform: translateY(-100%);
+  animation: scanline 5.5s linear infinite;
+}
+
+.a4-paper {
+  aspect-ratio: 210 / 297;
+  background: var(--paper);
+  color: #111827;
+  font-family: "KTR Paper Sans", "KTR Paper CJK", Arial, Helvetica, sans-serif;
+  overflow: hidden;
+  contain: paint;
+}
+
+.a4-paper .font-mono {
+  font-family: "KTR Paper Mono", "KTR Paper CJK", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.compress-pulse {
+  animation: compress-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes neon-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  35%,
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes compress-pulse {
+  from {
+    filter: saturate(1);
+    box-shadow: none;
+  }
+  to {
+    filter: saturate(1.08);
+    box-shadow: 0 0 14px rgba(255, 138, 61, 0.18);
+  }
+}
+
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  [data-print-hidden] {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

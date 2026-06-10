@@ -1,0 +1,36 @@
+{
+  "name": "kill-the-resume",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@tailwindcss/postcss": "4.3.0",
+    "naive-ui": "2.44.1",
+    "next": "16.2.7",
+    "pdf-lib": "^1.17.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "tailwindcss": "4.3.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.7",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "postcss": "8.5.15"
+  }
+}
