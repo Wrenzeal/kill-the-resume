@@ -125,7 +125,10 @@ export function markdownToPlainText(value: string | undefined | null, options: {
   const bulletPrefix = options.bulletPrefix ?? "";
   const lines = parseMarkdownBlocks(value).flatMap((block) => {
     if (block.type === "blank") return options.preserveBlankLines ? [""] : [];
-    if (block.type === "bullet") return [`${bulletPrefix}${block.text}`.trimEnd()];
+    if (block.type === "bullet") {
+      const prefix = block.ordered ? `${block.order ?? 1}. ` : bulletPrefix;
+      return [`${prefix}${block.text}`.trimEnd()];
+    }
     return block.text.split("\n").map((line) => line.trim()).filter(Boolean);
   });
 

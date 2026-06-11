@@ -115,6 +115,8 @@ export type ResumeLayout = {
 };
 
 export type ResumeDraft = {
+  schema?: string;
+  version?: number;
   theme: ResumeTheme;
   identity: ResumeIdentity;
   projects: ProjectExperience[];

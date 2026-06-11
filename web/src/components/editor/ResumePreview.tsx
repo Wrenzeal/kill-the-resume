@@ -4,14 +4,14 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
 import { formatDateRange } from "@/lib/date-range";
-import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import { getResumeDensity } from "@/lib/resume-metrics";
 import { getModuleDefinition, getOrderedFields, isEditorModule } from "@/lib/resume-layout";
-import { skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
+import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
+import { splitSkillTags } from "@/lib/skills";
 import { useEditorStore } from "@/store/editor-store";
-import type { CustomModuleField, DateRange, EditorModule, ModuleLayout, ResumeDraft } from "@/types/resume";
+import type { CustomModuleField, EditorModule, ModuleLayout, ResumeDraft } from "@/types/resume";
 
 const densityLabelKeys: Record<ReturnType<typeof getResumeDensity>["level"], TranslationKey> = {
   stable: "density.stable",
@@ -30,32 +30,13 @@ function previewFirstLine(value: string | undefined | null) {
   return previewPlainText(value).split("\n").find(Boolean) ?? "";
 }
 
-type PreviewValue = string | DateRange;
-type PreviewItem = Record<string, PreviewValue>;
 type PreviewModuleNode = {
   module: string;
   node: ReactNode;
 };
 
-function getModuleItems(draft: ResumeDraft, module: EditorModule): PreviewItem[] {
-  if (module === "identity") return [draft.identity];
-  if (module === "projects") return draft.projects;
-  if (module === "work") return draft.work;
-  if (module === "skills") return [];
-  if (module === "education") return draft.education;
-  return [draft.exportProtocol];
-}
-
-function fieldVisible(draft: ResumeDraft, module: EditorModule, fieldId: string) {
-  return getOrderedFields(module, draft.layout.fields[module]).some((field) => field.id === fieldId && field.visible);
-}
-
 function PreviewSectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="font-mono text-[11.5px] font-black uppercase tracking-[0.26em] text-[var(--resume-accent)]">{children}</h2>;
-}
-
-function fieldCaption(label: string) {
-  return label.includes("·") ? label.split("·").at(-1)?.trim() ?? label : label;
 }
 
 function PreviewMarkdownBlock({ block }: { block: MarkdownBlock }) {
@@ -124,10 +105,7 @@ function PreviewSkillTags({ value }: { value: string }) {
 }
 
 function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: TranslationKey) => string }) {
-  const photo = fieldVisible(draft, "identity", "photo") ? draft.identity.photo.trim() : "";
-  const website = fieldVisible(draft, "identity", "website") ? formatWebsiteDisplay(draft.identity.website) : "";
-  const websiteHref = fieldVisible(draft, "identity", "website") ? formatWebsiteHref(draft.identity.website) : "";
-  const hasContact = Boolean((fieldVisible(draft, "identity", "email") && draft.identity.email.trim()) || (fieldVisible(draft, "identity", "location") && draft.identity.location.trim()) || website);
+  const { email, location, photo, websiteDisplay: website, websiteHref, hasContact } = projectIdentityContact(draft);
   const wrappingContactStyle: CSSProperties = { overflowWrap: "anywhere", wordBreak: "break-word" };
   const compactWebsiteStyle: CSSProperties = {
     display: "-webkit-box",
@@ -146,11 +124,11 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
         photo ? "w-full leading-[1.32]" : "w-full leading-4",
       )}
     >
-      {fieldVisible(draft, "identity", "email") && draft.identity.email.trim() ? (
-        <p className={cn("uppercase", photo ? "" : "truncate")} style={photo ? wrappingContactStyle : undefined}>{draft.identity.email}</p>
+      {email ? (
+        <p className={cn("uppercase", photo ? "" : "truncate")} style={photo ? wrappingContactStyle : undefined}>{email}</p>
       ) : null}
-      {fieldVisible(draft, "identity", "location") && draft.identity.location.trim() ? (
-        <p className={cn("uppercase", photo ? "" : "truncate")} style={photo ? wrappingContactStyle : undefined}>{draft.identity.location}</p>
+      {location ? (
+        <p className={cn("uppercase", photo ? "" : "truncate")} style={photo ? wrappingContactStyle : undefined}>{location}</p>
       ) : null}
       {website ? (
         websiteHref ? (
@@ -167,7 +145,7 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
         ) : (
           <p
             className={cn("normal-case text-slate-500", photo ? "" : "break-words")}
-            title={draft.identity.website}
+            title={websiteHref || website}
             style={photo ? photoWebsiteStyle : compactWebsiteStyle}
           >
             {website}
@@ -181,13 +159,13 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
     <header data-resume-identity-header className="border-b-2 border-[var(--resume-accent)] pb-3">
       <div className="flex items-start justify-between gap-5">
         <div className="min-w-0 flex-1">
-          {fieldVisible(draft, "identity", "callsign") ? (
+          {isResumeFieldVisible(draft, "identity", "callsign") ? (
             <p className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--resume-accent)]">{draft.identity.callsign || t("identity.callsignPlaceholder")}</p>
           ) : null}
-          {fieldVisible(draft, "identity", "name") ? (
+          {isResumeFieldVisible(draft, "identity", "name") ? (
             <h1 className="mt-1.5 text-3xl font-black uppercase tracking-[-0.08em] text-slate-950">{draft.identity.name || t("identity.namePlaceholder")}</h1>
           ) : null}
-          {fieldVisible(draft, "identity", "title") ? (
+          {isResumeFieldVisible(draft, "identity", "title") ? (
             <p className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-slate-700">{draft.identity.title || t("identity.titlePlaceholder")}</p>
           ) : null}
         </div>
@@ -221,15 +199,14 @@ function PreviewFieldList({
   language,
 }: {
   fields: ReturnType<typeof getOrderedFields>;
-  item: PreviewItem;
+  item: ResumeItem;
   t: (key: TranslationKey) => string;
   language: Language;
 }) {
   return (
     <div className="space-y-1.5">
       {fields.map((field, index) => {
-        const rawValue = item[field.id] ?? "";
-        const value = field.id === "period" ? formatDateRange(rawValue, language) : String(rawValue);
+        const value = projectResumeItemFieldText(item, field.id, language);
 
         if (!value.trim()) {
           return null;
@@ -245,7 +222,7 @@ function PreviewFieldList({
           );
         }
 
-        const isMeta = field.id === "role" || field.id === "period" || field.id === "location" || field.id === "stack" || field.id === "degree";
+        const isMeta = isResumeMetaField(field.id);
         const plainValue = previewPlainText(value);
 
         if (isMeta) {
@@ -278,12 +255,12 @@ function PreviewFieldList({
 function renderGenericModule(draft: ResumeDraft, module: EditorModule, t: (key: TranslationKey) => string, language: Language) {
   const definition = getModuleDefinition(module);
   const fields = getOrderedFields(module, draft.layout.fields[module]).filter((field) => field.visible);
-  const items = getModuleItems(draft, module);
+  const items = getResumeModuleItems(draft, module);
 
   if (module === "identity") {
     return (
       <div className="space-y-2">
-        {fieldVisible(draft, "identity", "summary") ? (
+        {isResumeFieldVisible(draft, "identity", "summary") ? (
           <section className="mt-3">
             <PreviewSectionTitle>{t("preview.summary")}</PreviewSectionTitle>
             <PreviewMarkdownText value={draft.identity.summary || t("identity.summaryPlaceholder")} className="mt-1.5" />
@@ -324,20 +301,20 @@ function renderGenericModule(draft: ResumeDraft, module: EditorModule, t: (key: 
   }
 
   if (module === "skills") {
-    const skillCategories = skillCategoriesFromFields(draft.skills, fields);
-    if (!skillCategories.length) return null;
+    const skillSection = projectSkillSection(draft);
+    if (!skillSection.categories.length) return null;
 
-    const columnsClass = draft.skills.columnMode === "one" ? "grid-cols-1" : "grid-cols-2";
+    const columnsClass = skillSection.columnMode === "one" ? "grid-cols-1" : "grid-cols-2";
 
     return (
       <section className="mt-3.5">
         <PreviewSectionTitle>{t("preview.skillsMatrix")}</PreviewSectionTitle>
         <dl className={cn("mt-2 grid gap-3", columnsClass)}>
-          {skillCategories.map((category) => (
+          {skillSection.categories.map((category) => (
             <div key={category.id} className="min-w-0">
               <dt className="font-mono text-[9.6px] font-black uppercase tracking-[0.16em] text-[var(--resume-accent)]">{fieldCaption(category.label)}</dt>
               <dd className="mt-1">
-                {draft.skills.displayMode === "tags" ? (
+                {skillSection.displayMode === "tags" ? (
                   <PreviewSkillTags value={category.content} />
                 ) : (
                   <PreviewMarkdownText value={category.content} />

@@ -59,6 +59,9 @@ func Connect(cfg config.Config) (*gorm.DB, error) {
 	if err := gormDB.AutoMigrate(&models.User{}, &models.Resume{}); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}
+	if err := runMigrations(gormDB); err != nil {
+		return nil, fmt.Errorf("run migrations: %w", err)
+	}
 
 	return gormDB, nil
 }

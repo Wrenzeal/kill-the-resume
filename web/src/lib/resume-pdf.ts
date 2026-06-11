@@ -1,13 +1,13 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { formatDateRange } from "@/lib/date-range";
-import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import { getOrderedFields } from "@/lib/resume-layout";
+import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
 import { hexToRgbTuple } from "@/lib/resume-theme";
-import { normalizeSkillColumnMode, normalizeSkillDisplayMode, skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
+import { splitSkillTags } from "@/lib/skills";
 import type { Language, TranslationKey } from "@/lib/i18n";
-import type { CustomModule, CustomModuleField, DateRange, EditorModule, ResumeDraft } from "@/types/resume";
+import type { CustomModule, CustomModuleField, EditorModule, ResumeDraft } from "@/types/resume";
 
 type PdfTextStyle = "normal" | "bold";
 type PdfFontRole = "sans" | "mono";
@@ -35,9 +35,6 @@ type PdfBlock = {
 };
 
 type PdfField = ReturnType<typeof getOrderedFields>[number];
-type ResumeValue = string | DateRange;
-type ResumeItem = Record<string, ResumeValue>;
-
 type PdfFontSet = {
   sans: Record<PdfTextStyle, PDFFont>;
   mono: Record<PdfTextStyle, PDFFont>;
@@ -168,34 +165,6 @@ function safeText(value: string | undefined | null) {
 
 function upper(value: string) {
   return safeText(value).toUpperCase();
-}
-
-function fieldCaption(label: string) {
-  return label.includes("·") ? label.split("·").at(-1)?.trim() ?? label : label;
-}
-
-function fieldVisible(draft: ResumeDraft, module: EditorModule, fieldId: string) {
-  return getOrderedFields(module, draft.layout.fields[module]).some((field) => field.id === fieldId && field.visible);
-}
-
-function getModuleItems(draft: ResumeDraft, module: EditorModule): ResumeItem[] {
-  if (module === "identity") return [draft.identity as unknown as ResumeItem];
-  if (module === "projects") return draft.projects as unknown as ResumeItem[];
-  if (module === "work") return draft.work as unknown as ResumeItem[];
-  if (module === "skills") return [];
-  if (module === "education") return draft.education as unknown as ResumeItem[];
-  return [draft.exportProtocol as unknown as ResumeItem];
-}
-
-
-function itemFieldText(item: ResumeItem, fieldId: string, language: Language) {
-  const value = item[fieldId];
-  if (fieldId === "period") return formatDateRange(value, language);
-  return String(value ?? "");
-}
-
-function isMetaField(fieldId: string) {
-  return fieldId === "role" || fieldId === "period" || fieldId === "location" || fieldId === "stack" || fieldId === "degree";
 }
 
 function containsCjk(value: string) {
@@ -359,11 +328,9 @@ function drawRightAlignedClampedText(
   textLine(page, line, right, y, size, style, fill, role, { align: "right" });
 }
 
-function drawRightAlignedWebsite(page: PDFPage, website: string, right: number, y: number, maxWidth: number) {
-  const content = formatWebsiteDisplay(website);
+function drawRightAlignedWebsite(page: PDFPage, content: string, href: string, right: number, y: number, maxWidth: number) {
   if (!content) return 0;
 
-  const href = formatWebsiteHref(website);
   const allLines = wrapped(content, maxWidth, 6.2, "normal", "mono");
   const lines = allLines.slice(0, 2);
   if (allLines.length > 2 && lines[1]) lines[1] = clampTextToWidth(lines[1], maxWidth, 6.2, "normal", "mono", "...");
@@ -373,7 +340,7 @@ function drawRightAlignedWebsite(page: PDFPage, website: string, right: number, 
     const lineWidth = Math.min(measureMixedTextWidth(line, 6.2, "normal", "mono"), maxWidth);
 
     textLine(page, line, right, lineY, 6.2, "normal", theme.muted, "mono", { align: "right" });
-    addUriLink(page, href, right - lineWidth, lineY - scaled(1.2), lineWidth, scaled(4.5));
+    if (href) addUriLink(page, href, right - lineWidth, lineY - scaled(1.2), lineWidth, scaled(4.5));
   });
 
   return lines.length;
@@ -490,7 +457,7 @@ function addGapBlock(blocks: PdfBlock[], gap: number) {
 }
 
 function addSummaryBlock(blocks: PdfBlock[], draft: ResumeDraft, t: PdfTranslate) {
-  if (!fieldVisible(draft, "identity", "summary")) return;
+  if (!isResumeFieldVisible(draft, "identity", "summary")) return;
   const summary = safeText(draft.identity.summary) || t("identity.summaryPlaceholder");
   const lines = wrapped(summary, 179, 8.2);
   const lh = lineHeight(8.2);
@@ -671,7 +638,7 @@ function addFieldBlocks(
   maxWidth: number,
   options: { includeTitle?: string; bordered?: boolean; borderColor?: PdfColor },
 ) {
-  const fieldText = itemFieldText(item, field.id, activePdfLanguage);
+  const fieldText = projectResumeItemFieldText(item, field.id, activePdfLanguage);
   if (field.id === "bullets") {
     const markdownValue = normalizePdfText(fieldText).trim();
     if (!markdownValue) return false;
@@ -687,7 +654,7 @@ function addFieldBlocks(
     return true;
   }
 
-  const meta = isMetaField(field.id);
+  const meta = isResumeMetaField(field.id);
   const label = fieldCaption(t(field.labelKey));
   addLabelValueFieldBlocks(blocks, label, meta ? upper(value) : value, maxWidth, meta ? 6.4 : 7.4, meta ? "mono" : "sans", meta ? theme.muted : theme.ink, options);
   return true;
@@ -695,7 +662,7 @@ function addFieldBlocks(
 
 function addRepeatableBlocks(blocks: PdfBlock[], draft: ResumeDraft, module: EditorModule, title: string, t: PdfTranslate, bordered: boolean, borderColor: PdfColor) {
   const fields = getOrderedFields(module, draft.layout.fields[module]).filter((field) => field.visible);
-  const items = getModuleItems(draft, module);
+  const items = getResumeModuleItems(draft, module);
   if (!fields.length) return;
 
   items.forEach((item, itemIndex) => {
@@ -847,12 +814,10 @@ function drawSkillTags(page: PDFPage, label: string, value: string, x: number, y
 }
 
 function addSkillsBlock(blocks: PdfBlock[], draft: ResumeDraft, t: PdfTranslate) {
-  const categories = skillCategoriesFromFields(draft.skills, getOrderedFields("skills", draft.layout.fields.skills));
+  const skillSection = projectSkillSection(draft);
+  const { categories, displayMode, columnCount } = skillSection;
   if (!categories.length) return;
 
-  const displayMode = normalizeSkillDisplayMode(draft.skills.displayMode);
-  const columnMode = normalizeSkillColumnMode(draft.skills.columnMode);
-  const columnCount = columnMode === "one" ? 1 : 2;
   const colGap = columnCount === 1 ? 0 : 9;
   const colWidth = (179 - colGap * (columnCount - 1)) / columnCount;
   const rows = categories.reduce<Array<typeof categories>>((acc, category, index) => {
@@ -1042,7 +1007,8 @@ function drawImageContain(page: PDFPage, asset: PdfImageAsset, x: number, y: num
 function drawHeader(page: PDFPage, draft: ResumeDraft, cursor: PdfCursor, t: PdfTranslate) {
   const left = pageSize.marginX;
   const right = pageSize.width - pageSize.marginX;
-  const photo = fieldVisible(draft, "identity", "photo") ? activeImages.identityPhoto : undefined;
+  const contact = projectIdentityContact(draft);
+  const photo = contact.photo ? activeImages.identityPhoto : undefined;
   const photoWidth = scaled(20);
   const photoHeight = scaled(26);
   const photoX = right - photoWidth;
@@ -1051,27 +1017,27 @@ function drawHeader(page: PDFPage, draft: ResumeDraft, cursor: PdfCursor, t: Pdf
   const contactWidth = 58;
   const contactX = photo ? Math.max(left + 85, contactRight - contactWidth) : right - contactWidth;
 
-  if (fieldVisible(draft, "identity", "callsign")) textLine(page, upper(draft.identity.callsign || t("identity.callsignPlaceholder")), left, cursor.y, 6.5, "normal", activePdfAccent, "mono");
-  if (fieldVisible(draft, "identity", "name")) textLine(page, upper(draft.identity.name || t("identity.namePlaceholder")), left, cursor.y + scaled(16), 22, "bold", theme.black, "sans");
-  if (fieldVisible(draft, "identity", "title")) textLine(page, upper(draft.identity.title || t("identity.titlePlaceholder")), left, cursor.y + scaled(29), 8.5, "normal", theme.muted, "mono");
+  if (isResumeFieldVisible(draft, "identity", "callsign")) textLine(page, upper(draft.identity.callsign || t("identity.callsignPlaceholder")), left, cursor.y, 6.5, "normal", activePdfAccent, "mono");
+  if (isResumeFieldVisible(draft, "identity", "name")) textLine(page, upper(draft.identity.name || t("identity.namePlaceholder")), left, cursor.y + scaled(16), 22, "bold", theme.black, "sans");
+  if (isResumeFieldVisible(draft, "identity", "title")) textLine(page, upper(draft.identity.title || t("identity.titlePlaceholder")), left, cursor.y + scaled(29), 8.5, "normal", theme.muted, "mono");
 
   if (photo) drawImageContain(page, photo, photoX, photoY, photoWidth, photoHeight);
 
   const contactMaxWidth = Math.max(42, contactRight - contactX);
   let contactY = cursor.y + scaled(photo ? 2.8 : 2.2);
 
-  if (fieldVisible(draft, "identity", "email") && draft.identity.email.trim()) {
-    drawRightAlignedClampedText(page, upper(draft.identity.email), contactRight, contactY, contactMaxWidth, 6.5, "normal", theme.muted, "mono");
+  if (contact.email) {
+    drawRightAlignedClampedText(page, upper(contact.email), contactRight, contactY, contactMaxWidth, 6.5, "normal", theme.muted, "mono");
     contactY += scaled(5);
   }
 
-  if (fieldVisible(draft, "identity", "location") && draft.identity.location.trim()) {
-    drawRightAlignedClampedText(page, upper(draft.identity.location), contactRight, contactY, contactMaxWidth, 6.5, "normal", theme.muted, "mono");
+  if (contact.location) {
+    drawRightAlignedClampedText(page, upper(contact.location), contactRight, contactY, contactMaxWidth, 6.5, "normal", theme.muted, "mono");
     contactY += scaled(5);
   }
 
-  if (fieldVisible(draft, "identity", "website") && draft.identity.website.trim()) {
-    drawRightAlignedWebsite(page, draft.identity.website, contactRight, contactY, contactMaxWidth);
+  if (contact.websiteDisplay) {
+    drawRightAlignedWebsite(page, contact.websiteDisplay, contact.websiteHref, contactRight, contactY, contactMaxWidth);
   }
 
   drawLine(page, left, cursor.y + scaled(36), right, cursor.y + scaled(36), activePdfAccent, 0.55);
@@ -1205,7 +1171,7 @@ function dataUrlToBytes(dataUrl: string) {
 }
 
 async function loadPdfImages(pdfDoc: PDFDocument, draft: ResumeDraft) {
-  const photoPayload = fieldVisible(draft, "identity", "photo") ? draft.identity.photo.trim() : "";
+  const photoPayload = isResumeFieldVisible(draft, "identity", "photo") ? draft.identity.photo.trim() : "";
   if (!photoPayload) return {};
 
   const parsed = dataUrlToBytes(photoPayload);

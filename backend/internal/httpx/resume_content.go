@@ -13,6 +13,11 @@ var (
 	looseYearMonthPattern    = regexp.MustCompile(`(\d{4})(?:[-./年\s]?)(\d{1,2})?`)
 )
 
+const (
+	resumeContentSchema  = "kill-the-resume.resume.v1"
+	resumeContentVersion = 1
+)
+
 type normalizedPeriod struct {
 	Start     string `json:"start"`
 	End       string `json:"end"`
@@ -29,18 +34,24 @@ func normalizeResumeContentJSON(raw json.RawMessage) (json.RawMessage, error) {
 
 	var root map[string]any
 	if err := json.Unmarshal(raw, &root); err != nil {
-		return append(json.RawMessage(nil), raw...), nil
+		return nil, fmt.Errorf("resume content must be a JSON object")
 	}
 
 	for _, key := range []string{"projects", "work", "education"} {
 		normalizePeriodCollection(root, key)
 	}
+	normalizeResumeContentSchema(root)
 
 	normalized, err := json.Marshal(root)
 	if err != nil {
 		return nil, fmt.Errorf("normalize resume content: %w", err)
 	}
 	return normalized, nil
+}
+
+func normalizeResumeContentSchema(root map[string]any) {
+	root["schema"] = resumeContentSchema
+	root["version"] = resumeContentVersion
 }
 
 func normalizePeriodCollection(root map[string]any, key string) {

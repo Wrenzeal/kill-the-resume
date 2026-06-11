@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "web:dev": "npm --prefix web run dev",
+    "web:test": "npm --prefix web run test",
     "web:build": "npm --prefix web run build",
     "web:lint": "npm --prefix web run lint",
     "web:typecheck": "npm --prefix web run typecheck",
