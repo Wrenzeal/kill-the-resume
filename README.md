@@ -125,11 +125,10 @@ npm run backend:build
 推荐环境变量：
 
 ```txt
-NEXT_PUBLIC_API_BASE_URL=/api/v1
-KTR_BACKEND_ORIGIN=https://<你的后端公开域名>
+NEXT_PUBLIC_API_BASE_URL=https://api.killer.wrenzeal.top/api/v1
 ```
 
-`NEXT_PUBLIC_API_BASE_URL=/api/v1` 让浏览器始终请求 Vercel 同源路径；`web/next.config.ts` 会在设置 `KTR_BACKEND_ORIGIN` 后把 `/api/v1/*`、`/healthz`、`/assets/fonts/*` rewrite 到外部 Go 后端。这样前端切换 Vercel 域名或预览域时无需重新写死浏览器 API 地址。
+`NEXT_PUBLIC_API_BASE_URL=https://api.killer.wrenzeal.top/api/v1` 让浏览器直接请求后端 API 子域，Network 面板中应显示 `api.killer.wrenzeal.top`。`web/next.config.ts` 仍保留可选 rewrite 支持，但当前推荐直接 API 子域，避免 Vercel rewrite 配置未生效时同源 `/api/v1` 返回 404。
 
 ### 后端
 
@@ -139,7 +138,7 @@ KTR_BACKEND_ORIGIN=https://<你的后端公开域名>
 https://api.example.com
 ```
 
-然后把该 origin 配到 Vercel 的 `KTR_BACKEND_ORIGIN`。后端 `CORS_ORIGINS` 默认已包含本地开发地址和 `https://*.vercel.app`，绑定自定义前端域名后建议追加精确域名，例如：
+后端 `CORS_ORIGINS` 默认已包含本地开发地址和 `https://*.vercel.app`，绑定自定义前端域名后建议追加精确域名，例如：
 
 ```txt
 CORS_ORIGINS=https://your-frontend.example.com,https://*.vercel.app,http://localhost:3000,http://127.0.0.1:3000

@@ -10,8 +10,8 @@ import { initialResumeDraft } from "@/lib/resume-defaults";
 import type { ResumeDraft } from "@/types/resume";
 
 
-test("API base URL resolves for local, remote HTTP, and Vercel HTTPS frontends", () => {
-  assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "/api/v1");
+test("API base URL resolves for local, remote HTTP, and direct HTTPS production API", () => {
+  assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "https://api.killer.wrenzeal.top/api/v1");
   assert.equal(
     resolveApiBaseUrlForEnvironment({ isBrowser: true, pageHostname: "localhost", pageProtocol: "http:" }),
     "http://127.0.0.1:19304/api/v1",
@@ -22,7 +22,7 @@ test("API base URL resolves for local, remote HTTP, and Vercel HTTPS frontends",
   );
   assert.equal(
     resolveApiBaseUrlForEnvironment({ isBrowser: true, pageHostname: "kill-the-resume.vercel.app", pageProtocol: "https:" }),
-    "/api/v1",
+    "https://api.killer.wrenzeal.top/api/v1",
   );
   assert.equal(
     resolveApiBaseUrlForEnvironment({
@@ -31,7 +31,16 @@ test("API base URL resolves for local, remote HTTP, and Vercel HTTPS frontends",
       pageHostname: "kill-the-resume.vercel.app",
       pageProtocol: "https:",
     }),
-    "/api/v1",
+    "https://api.killer.wrenzeal.top/api/v1",
+  );
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({
+      explicitApiBaseUrl: "/api/v1",
+      isBrowser: true,
+      pageHostname: "killer.wrenzeal.top",
+      pageProtocol: "https:",
+    }),
+    "https://api.killer.wrenzeal.top/api/v1",
   );
   assert.equal(
     resolveApiBaseUrlForEnvironment({

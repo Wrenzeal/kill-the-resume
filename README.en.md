@@ -125,11 +125,10 @@ When importing this GitHub repository into Vercel, set **Root Directory** to `we
 Recommended environment variables:
 
 ```txt
-NEXT_PUBLIC_API_BASE_URL=/api/v1
-KTR_BACKEND_ORIGIN=https://<your-public-backend-origin>
+NEXT_PUBLIC_API_BASE_URL=https://api.killer.wrenzeal.top/api/v1
 ```
 
-`NEXT_PUBLIC_API_BASE_URL=/api/v1` keeps browser API calls same-origin on Vercel. When `KTR_BACKEND_ORIGIN` is set, `web/next.config.ts` rewrites `/api/v1/*`, `/healthz`, and `/assets/fonts/*` to the external Go backend, so Vercel production and preview domains do not need hard-coded browser API hosts.
+`NEXT_PUBLIC_API_BASE_URL=https://api.killer.wrenzeal.top/api/v1` makes browser API calls go directly to the backend API subdomain, so the Network panel should show `api.killer.wrenzeal.top`. `web/next.config.ts` still keeps optional rewrite support, but the recommended production path is the direct API subdomain to avoid same-origin `/api/v1` 404s when Vercel rewrites are not active.
 
 ### Backend
 
@@ -139,7 +138,7 @@ The backend can still be deployed to a server with [`script/deploy-killer-backen
 https://api.example.com
 ```
 
-Then set that origin as Vercel `KTR_BACKEND_ORIGIN`. Backend `CORS_ORIGINS` now defaults to local dev origins plus `https://*.vercel.app`; after binding a custom frontend domain, prefer adding that exact origin too, for example:
+Backend `CORS_ORIGINS` now defaults to local dev origins plus `https://*.vercel.app`; after binding a custom frontend domain, prefer adding that exact origin too, for example:
 
 ```txt
 CORS_ORIGINS=https://your-frontend.example.com,https://*.vercel.app,http://localhost:3000,http://127.0.0.1:3000

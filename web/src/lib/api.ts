@@ -2,7 +2,7 @@ import type { ResumeDraft } from "@/types/resume";
 
 const explicitApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const fallbackLocalApiBaseUrl = "http://127.0.0.1:19304/api/v1";
-const sameOriginApiBaseUrl = "/api/v1";
+const directProductionApiBaseUrl = "https://api.killer.wrenzeal.top/api/v1";
 
 function stripTrailingSlash(value: string) {
   return value.replace(/\/$/, "");
@@ -27,13 +27,17 @@ type ApiBaseEnvironment = {
   isBrowser?: boolean;
 };
 
+function isRelativeApiBaseUrl(value: string) {
+  return value.startsWith("/");
+}
+
 function remoteBrowserFallback(pageHostname: string, pageProtocol: string) {
   if (isLoopbackHost(pageHostname)) {
     return fallbackLocalApiBaseUrl;
   }
 
   if (pageProtocol === "https:") {
-    return sameOriginApiBaseUrl;
+    return directProductionApiBaseUrl;
   }
 
   return `${pageProtocol}//${pageHostname}:19304/api/v1`;
@@ -44,12 +48,15 @@ export function resolveApiBaseUrlForEnvironment(environment: ApiBaseEnvironment 
   const isBrowser = environment.isBrowser ?? typeof window !== "undefined";
 
   if (!isBrowser) {
-    return stripTrailingSlash(configuredApiBaseUrl || sameOriginApiBaseUrl);
+    return stripTrailingSlash(configuredApiBaseUrl || directProductionApiBaseUrl);
   }
 
   const pageHostname = environment.pageHostname ?? window.location.hostname;
   const pageProtocol = environment.pageProtocol ?? window.location.protocol;
-  const shouldUseRemoteFallback = !configuredApiBaseUrl || (pointsToLoopback(configuredApiBaseUrl) && !isLoopbackHost(pageHostname));
+  const shouldUseRemoteFallback =
+    !configuredApiBaseUrl ||
+    (pointsToLoopback(configuredApiBaseUrl) && !isLoopbackHost(pageHostname)) ||
+    (pageProtocol === "https:" && isRelativeApiBaseUrl(configuredApiBaseUrl));
 
   if (shouldUseRemoteFallback) {
     return stripTrailingSlash(remoteBrowserFallback(pageHostname, pageProtocol));
