@@ -116,22 +116,36 @@ npm run backend:build
 
 ## 生产部署概览
 
-当前部署脚本位于 [`script/`](./script)：
+前端推荐部署到 Vercel，后端继续作为外部 Go API 服务运行（可继续放在服务器、PM2/nginx 后面）。
 
-- `deploy-killer-frontend.sh`
-- `deploy-killer-backend.sh`
-- `start-killer-backend.sh`
-- `renew-killer-cert.sh`
+### Vercel 前端
 
-根目录快捷命令：
+在 Vercel 从 GitHub 导入本仓库时，将 **Root Directory** 设为 `web`，使用仓库内 [`web/vercel.json`](./web/vercel.json) 的 Next.js 构建配置。
 
-```bash
-npm run deploy:killer:frontend
-npm run deploy:killer:backend
-npm run deploy:killer
+推荐环境变量：
+
+```txt
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+KTR_BACKEND_ORIGIN=https://<你的后端公开域名>
 ```
 
-生产站点当前使用 nginx + PM2：前端 Next.js 服务经 nginx 代理，后端 Go API 监听 `127.0.0.1:19304`。
+`NEXT_PUBLIC_API_BASE_URL=/api/v1` 让浏览器始终请求 Vercel 同源路径；`web/next.config.ts` 会在设置 `KTR_BACKEND_ORIGIN` 后把 `/api/v1/*`、`/healthz`、`/assets/fonts/*` rewrite 到外部 Go 后端。这样前端切换 Vercel 域名或预览域时无需重新写死浏览器 API 地址。
+
+### 后端
+
+后端仍可用 [`script/deploy-killer-backend.sh`](./script/deploy-killer-backend.sh) 发布到服务器。部署后确保后端有 HTTPS 公开 origin，例如：
+
+```txt
+https://api.example.com
+```
+
+然后把该 origin 配到 Vercel 的 `KTR_BACKEND_ORIGIN`。后端 `CORS_ORIGINS` 默认已包含本地开发地址和 `https://*.vercel.app`，绑定自定义前端域名后建议追加精确域名，例如：
+
+```txt
+CORS_ORIGINS=https://your-frontend.example.com,https://*.vercel.app,http://localhost:3000,http://127.0.0.1:3000
+```
+
+旧的服务器内前端部署脚本仍保留在 [`script/`](./script) 中，主要用于需要回滚到自托管 Next.js 时使用。
 
 ## 维护原则
 

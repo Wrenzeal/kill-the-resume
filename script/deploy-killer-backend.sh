@@ -17,7 +17,7 @@ if [ ! -f "$ENV_FILE" ]; then
   fi
 
   secret="$(openssl rand -hex 32)"
-  cors_origins="${CORS_ORIGINS:-https://$DOMAIN,http://$DOMAIN,http://127.0.0.1:$FRONTEND_PORT,http://localhost:$FRONTEND_PORT}"
+  cors_origins="${CORS_ORIGINS:-https://$DOMAIN,http://$DOMAIN,https://*.vercel.app,http://127.0.0.1:$FRONTEND_PORT,http://localhost:$FRONTEND_PORT}"
   cat > "$ENV_FILE" <<ENV
 APP_ENV=production
 SERVER_ADDR=127.0.0.1:19304

@@ -1,5 +1,6 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { getApiBaseUrl } from "@/lib/api";
 import { formatDateRange } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import { getOrderedFields } from "@/lib/resume-layout";
@@ -97,7 +98,16 @@ function uniqueValues(values: string[]) {
 
 function backendFontUrl(fontName: string) {
   if (typeof window === "undefined") return "";
-  return `${window.location.protocol}//${window.location.hostname}:19304/assets/fonts/${fontName}`;
+
+  try {
+    const apiBaseUrl = getApiBaseUrl();
+    if (!apiBaseUrl.startsWith("http://") && !apiBaseUrl.startsWith("https://")) return "";
+
+    const apiUrl = new URL(apiBaseUrl);
+    return `${apiUrl.origin}/assets/fonts/${fontName}`;
+  } catch {
+    return "";
+  }
 }
 
 function fontCandidates(path: string) {

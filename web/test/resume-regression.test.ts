@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
@@ -7,6 +8,41 @@ import { defaultSkillLabels, joinSkillTags, normalizeSkillMatrix, normalizeSkill
 import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
 import { initialResumeDraft } from "@/lib/resume-defaults";
 import type { ResumeDraft } from "@/types/resume";
+
+
+test("API base URL resolves for local, remote HTTP, and Vercel HTTPS frontends", () => {
+  assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "/api/v1");
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({ isBrowser: true, pageHostname: "localhost", pageProtocol: "http:" }),
+    "http://127.0.0.1:19304/api/v1",
+  );
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({ isBrowser: true, pageHostname: "38.246.253.179", pageProtocol: "http:" }),
+    "http://38.246.253.179:19304/api/v1",
+  );
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({ isBrowser: true, pageHostname: "kill-the-resume.vercel.app", pageProtocol: "https:" }),
+    "/api/v1",
+  );
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({
+      explicitApiBaseUrl: "http://127.0.0.1:19304/api/v1",
+      isBrowser: true,
+      pageHostname: "kill-the-resume.vercel.app",
+      pageProtocol: "https:",
+    }),
+    "/api/v1",
+  );
+  assert.equal(
+    resolveApiBaseUrlForEnvironment({
+      explicitApiBaseUrl: "https://api.example.com/api/v1/",
+      isBrowser: true,
+      pageHostname: "kill-the-resume.vercel.app",
+      pageProtocol: "https:",
+    }),
+    "https://api.example.com/api/v1",
+  );
+});
 
 test("website display stays compact while href targets an external URL", () => {
   assert.equal(formatWebsiteDisplay(" https://www.Example.dev/path/ "), "Example.dev/path");

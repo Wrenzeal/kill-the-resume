@@ -2,7 +2,7 @@
 
 Frontend app for kill-the-resume.
 
-## Run
+## Run locally
 
 ```bash
 npm run dev
@@ -16,17 +16,15 @@ From the repository root, you can also run:
 npm run web:dev
 ```
 
-## Remote/server access
-
-The dev server binds to `0.0.0.0` so it can be opened from a server IP. If you see a Next.js `allowedDevOrigins` warning after changing the host/IP, add that host to `next.config.ts` and restart the dev server.
+The dev server binds to `0.0.0.0` so it can be opened from a server IP. If you see a Next.js `allowedDevOrigins` warning after changing the host/IP, set `NEXT_ALLOWED_DEV_ORIGINS` and restart the dev server.
 
 ## Backend API
 
-The editor cloud-resume panel calls the Go backend through:
+Local development can leave `NEXT_PUBLIC_API_BASE_URL` empty. The browser API base is resolved as follows:
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:19304/api/v1
-```
+- localhost frontend: `http://127.0.0.1:19304/api/v1`;
+- remote HTTP frontend, such as `http://<server-ip>:3000/editor`: `http://<server-ip>:19304/api/v1`;
+- HTTPS frontend, such as Vercel: same-origin `/api/v1`.
 
 Start backend from the repository root with:
 
@@ -34,19 +32,22 @@ Start backend from the repository root with:
 npm run backend:dev
 ```
 
-Then start frontend with `npm run web:dev` and open `/editor`.
+## Vercel deployment
 
-### Remote API host
-
-远程访问时不要使用 `127.0.0.1` 作为浏览器 API 地址；那会指向用户自己的电脑。
-如果没有配置 `NEXT_PUBLIC_API_BASE_URL`，前端会按当前页面主机自动推导：
+Use this directory as the Vercel project root:
 
 ```txt
-http://<当前前端访问主机>:19304/api/v1
+Root Directory: web
+Framework: Next.js
 ```
 
-例如从 `http://<server-ip>:3000/editor` 打开时，会请求：
+`web/vercel.json` pins the Vercel commands to `npm ci`, `npm run build`, and `npm run dev`.
+
+Recommended Vercel environment variables:
 
 ```txt
-http://<server-ip>:19304/api/v1
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+KTR_BACKEND_ORIGIN=https://<your-public-backend-origin>
 ```
+
+With `KTR_BACKEND_ORIGIN` set, `next.config.ts` rewrites same-origin `/api/v1/*`, `/healthz`, and `/assets/fonts/*` requests to the external Go backend. If you intentionally want direct browser-to-backend requests instead of rewrites, set `NEXT_PUBLIC_API_BASE_URL=https://<backend-origin>/api/v1` and make sure the backend `CORS_ORIGINS` includes the Vercel/custom frontend origin.

@@ -82,6 +82,7 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	router.Use(gin.Logger(), gin.Recovery(), securityHeadersMiddleware(cfg), requestBodyGuardMiddleware(cfg.MaxBodyBytes))
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.CORSOrigins,
+		AllowWildcard:    true,
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
 		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept"},
 		ExposeHeaders:    []string{"Content-Length"},

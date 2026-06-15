@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const defaultCORSOrigins = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3301,http://127.0.0.1:3301,http://localhost:3302,http://127.0.0.1:3302,https://*.vercel.app"
+
 type Config struct {
 	Env                 string
 	ServerAddr          string
@@ -45,7 +47,7 @@ func Load() Config {
 		JWTIssuer:           env("JWT_ISSUER", "kill-the-resume"),
 		JWTAudience:         env("JWT_AUDIENCE", "kill-the-resume-web"),
 		JWTTTL:              time.Duration(jwtHours) * time.Hour,
-		CORSOrigins:         envCSV("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3301,http://127.0.0.1:3301,http://localhost:3302,http://127.0.0.1:3302"),
+		CORSOrigins:         envCSV("CORS_ORIGINS", defaultCORSOrigins),
 		MaxBodyBytes:        envInt64("MAX_BODY_BYTES", 1<<20),
 		AuthRateLimitMax:    envInt("AUTH_RATE_LIMIT_MAX", 8),
 		AuthRateLimitWindow: time.Duration(rateLimitMinutes) * time.Minute,

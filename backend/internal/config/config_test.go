@@ -31,3 +31,19 @@ func TestValidateAcceptsDevelopmentDefaults(t *testing.T) {
 		t.Fatalf("expected development defaults to validate: %v", err)
 	}
 }
+
+func TestLoadDefaultCORSIncludesVercelPreviewWildcard(t *testing.T) {
+	t.Setenv("CORS_ORIGINS", "")
+	cfg := Load()
+
+	found := false
+	for _, origin := range cfg.CORSOrigins {
+		if origin == "https://*.vercel.app" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected default CORS origins to include Vercel preview wildcard, got %v", cfg.CORSOrigins)
+	}
+}

@@ -2,6 +2,7 @@ import type { ResumeDraft } from "@/types/resume";
 
 const explicitApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const fallbackLocalApiBaseUrl = "http://127.0.0.1:19304/api/v1";
+const sameOriginApiBaseUrl = "/api/v1";
 
 function stripTrailingSlash(value: string) {
   return value.replace(/\/$/, "");
@@ -19,19 +20,46 @@ function pointsToLoopback(url: string) {
   }
 }
 
+type ApiBaseEnvironment = {
+  explicitApiBaseUrl?: string;
+  pageHostname?: string;
+  pageProtocol?: string;
+  isBrowser?: boolean;
+};
+
+function remoteBrowserFallback(pageHostname: string, pageProtocol: string) {
+  if (isLoopbackHost(pageHostname)) {
+    return fallbackLocalApiBaseUrl;
+  }
+
+  if (pageProtocol === "https:") {
+    return sameOriginApiBaseUrl;
+  }
+
+  return `${pageProtocol}//${pageHostname}:19304/api/v1`;
+}
+
+export function resolveApiBaseUrlForEnvironment(environment: ApiBaseEnvironment = {}) {
+  const configuredApiBaseUrl = environment.explicitApiBaseUrl?.trim() || explicitApiBaseUrl || "";
+  const isBrowser = environment.isBrowser ?? typeof window !== "undefined";
+
+  if (!isBrowser) {
+    return stripTrailingSlash(configuredApiBaseUrl || sameOriginApiBaseUrl);
+  }
+
+  const pageHostname = environment.pageHostname ?? window.location.hostname;
+  const pageProtocol = environment.pageProtocol ?? window.location.protocol;
+  const shouldUseRemoteFallback = !configuredApiBaseUrl || (pointsToLoopback(configuredApiBaseUrl) && !isLoopbackHost(pageHostname));
+
+  if (shouldUseRemoteFallback) {
+    return stripTrailingSlash(remoteBrowserFallback(pageHostname, pageProtocol));
+  }
+
+  return stripTrailingSlash(configuredApiBaseUrl);
+}
+
 function inferBrowserApiBaseUrl() {
-  if (typeof window === "undefined") {
-    return stripTrailingSlash(explicitApiBaseUrl || fallbackLocalApiBaseUrl);
-  }
-
-  const pageHost = window.location.hostname;
-  const shouldUsePageHost = !explicitApiBaseUrl || (pointsToLoopback(explicitApiBaseUrl) && !isLoopbackHost(pageHost));
-
-  if (shouldUsePageHost) {
-    return stripTrailingSlash(`${window.location.protocol}//${pageHost}:19304/api/v1`);
-  }
-
-  return stripTrailingSlash(explicitApiBaseUrl);
+  return resolveApiBaseUrlForEnvironment();
 }
 
 export type ApiUser = {

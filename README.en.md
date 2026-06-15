@@ -116,22 +116,36 @@ The repository includes [`GitHub Actions CI`](./.github/workflows/ci.yml). It va
 
 ## Production Deployment Overview
 
-Deployment scripts live under [`script/`](./script):
+The recommended production shape is now a Vercel-hosted frontend plus an external Go API backend, which can still run on your own server behind PM2/nginx.
 
-- `deploy-killer-frontend.sh`
-- `deploy-killer-backend.sh`
-- `start-killer-backend.sh`
-- `renew-killer-cert.sh`
+### Vercel frontend
 
-Root shortcuts:
+When importing this GitHub repository into Vercel, set **Root Directory** to `web` and use the Next.js build configuration in [`web/vercel.json`](./web/vercel.json).
 
-```bash
-npm run deploy:killer:frontend
-npm run deploy:killer:backend
-npm run deploy:killer
+Recommended environment variables:
+
+```txt
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+KTR_BACKEND_ORIGIN=https://<your-public-backend-origin>
 ```
 
-The current production shape uses nginx + PM2: nginx proxies the Next.js frontend, while the Go backend listens on `127.0.0.1:19304`.
+`NEXT_PUBLIC_API_BASE_URL=/api/v1` keeps browser API calls same-origin on Vercel. When `KTR_BACKEND_ORIGIN` is set, `web/next.config.ts` rewrites `/api/v1/*`, `/healthz`, and `/assets/fonts/*` to the external Go backend, so Vercel production and preview domains do not need hard-coded browser API hosts.
+
+### Backend
+
+The backend can still be deployed to a server with [`script/deploy-killer-backend.sh`](./script/deploy-killer-backend.sh). After deployment, expose it through an HTTPS origin, for example:
+
+```txt
+https://api.example.com
+```
+
+Then set that origin as Vercel `KTR_BACKEND_ORIGIN`. Backend `CORS_ORIGINS` now defaults to local dev origins plus `https://*.vercel.app`; after binding a custom frontend domain, prefer adding that exact origin too, for example:
+
+```txt
+CORS_ORIGINS=https://your-frontend.example.com,https://*.vercel.app,http://localhost:3000,http://127.0.0.1:3000
+```
+
+The old self-hosted frontend deployment scripts remain under [`script/`](./script) for rollback or self-hosting scenarios.
 
 ## Maintenance Principles
 
