@@ -35,7 +35,7 @@ func TestRemotiveClientMapsPublicAPIResponseToJobPostings(t *testing.T) {
 	defer server.Close()
 
 	client := NewRemotiveClient(server.URL, time.Second)
-	jobs, err := client.Fetch(context.Background(), SourceQuery{Criteria: SearchCriteria{Keywords: []string{"React"}, RequiredSkills: []string{"TypeScript"}}, Limit: 1})
+	jobs, err := client.Fetch(context.Background(), SourceQuery{Criteria: SearchCriteria{Keywords: []string{"React"}, RequiredSkills: []string{"TypeScript"}}, Terms: []string{"React", "TypeScript"}, Limit: 1})
 	if err != nil {
 		t.Fatalf("fetch failed: %v", err)
 	}

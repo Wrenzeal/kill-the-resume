@@ -24,7 +24,9 @@ func (s *Server) listJobRadarJobs(c *gin.Context) {
 		ExcludeKeywords: queryTokens(c, "excludeKeywords"),
 		MinScore:        queryInt(c, "minScore", 0),
 	}
-	response, err := s.jobRadar.Search(c.Request.Context(), criteria)
+	response, err := s.jobRadar.SearchWithOptions(c.Request.Context(), criteria, jobradar.SearchOptions{
+		ForceRefresh: queryBool(c, "refresh") || queryBool(c, "forceRefresh"),
+	})
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "failed to load job radar feed")
 		return
@@ -53,4 +55,9 @@ func queryInt(c *gin.Context, key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func queryBool(c *gin.Context, key string) bool {
+	value := strings.ToLower(strings.TrimSpace(c.Query(key)))
+	return value == "1" || value == "true" || value == "yes" || value == "y" || value == "on"
 }

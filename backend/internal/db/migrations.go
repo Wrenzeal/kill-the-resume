@@ -49,6 +49,25 @@ var appMigrations = []appMigration{
 			`).Error
 		},
 	},
+	{
+		version:     "2026062202",
+		description: "scope job radar cache sync by search fingerprint",
+		run: func(tx *gorm.DB) error {
+			return tx.Exec(`
+				CREATE INDEX IF NOT EXISTS idx_job_search_caches_last_synced
+				ON job_search_caches (last_synced_at DESC);
+
+				CREATE INDEX IF NOT EXISTS idx_job_search_results_scope_seen
+				ON job_search_results (search_fingerprint, last_seen_at DESC);
+
+				CREATE INDEX IF NOT EXISTS idx_job_search_results_job
+				ON job_search_results (job_posting_id);
+
+				CREATE INDEX IF NOT EXISTS idx_job_search_results_source
+				ON job_search_results (source_name, source_job_id);
+			`).Error
+		},
+	},
 }
 
 func runMigrations(database *gorm.DB) error {

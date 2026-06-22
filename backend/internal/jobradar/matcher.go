@@ -249,8 +249,14 @@ func collectMatches(tokens []string, text string) []string {
 }
 
 func includesToken(text string, token string) bool {
-	normalizedToken := normalizeText(token)
-	return normalizedToken != "" && strings.Contains(normalizeText(text), normalizedToken)
+	normalizedText := normalizeText(text)
+	for _, variant := range tokenSearchVariants(token) {
+		normalizedToken := normalizeText(variant)
+		if normalizedToken != "" && strings.Contains(normalizedText, normalizedToken) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeText(value string) string {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
 import { useI18n } from "@/hooks/useI18n";
 import { apiClient, type JobRadarResponse } from "@/lib/api";
@@ -9,12 +9,8 @@ import { cn } from "@/lib/css";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import {
   createDefaultJobRadarCriteria,
-  createMockJobPostings,
-  getFreshnessStatus,
   jobFreshnessPolicy,
-  mockJobRadarSnapshotAt,
   parseJobRadarInput,
-  searchJobPostings,
   type JobMatchTag,
   type JobMatchResult,
 } from "@/lib/job-radar";
@@ -86,13 +82,13 @@ export function JobRadarConsole() {
 
 function JobRadarConsoleContent({ language }: { language: Language }) {
   const { t } = useI18n();
-  const now = useMemo(() => new Date(mockJobRadarSnapshotAt), []);
-  const fallbackJobs = useMemo(() => createMockJobPostings(now, language), [language, now]);
   const defaultCriteria = useMemo(() => createDefaultJobRadarCriteria(language), [language]);
   const [form, setForm] = useState<RadarForm>(() => toRadarForm(defaultCriteria));
   const [feed, setFeed] = useState<JobRadarResponse | null>(null);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
   const [feedError, setFeedError] = useState("");
+  const forceRefreshRef = useRef(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const criteria = useMemo(() => ({
     keywords: parseJobRadarInput(form.keywords),
     locations: parseJobRadarInput(form.locations),
@@ -101,13 +97,13 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
     excludeKeywords: parseJobRadarInput(form.excludeKeywords),
     minScore: form.minScore,
   }), [form]);
-  const fallbackResults = useMemo(() => searchJobPostings(fallbackJobs, criteria, now), [criteria, fallbackJobs, now]);
-
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
+      const forceRefresh = forceRefreshRef.current;
+      forceRefreshRef.current = false;
       setIsLoadingFeed(true);
-      apiClient.listJobRadarJobs(criteria, controller.signal)
+      apiClient.listJobRadarJobs(criteria, controller.signal, { refresh: forceRefresh })
         .then((response) => {
           setFeed(response);
           setFeedError(response.meta.syncError ?? "");
@@ -130,29 +126,34 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [criteria]);
+  }, [criteria, refreshNonce]);
 
-  const isFallbackFeed = !feed;
-  const results = feed?.jobs ?? fallbackResults;
+  const results = feed?.jobs ?? [];
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const selected = results.find((job) => job.id === selectedId) ?? results[0];
-  const fallbackExpiredCount = useMemo(() => fallbackJobs.filter((job) => getFreshnessStatus(job, now) === "expired").length, [fallbackJobs, now]);
-  const signalCount = feed?.meta.cachedCount ?? fallbackJobs.length;
-  const expiredCount = feed?.meta.expiredCount ?? fallbackExpiredCount;
+  const signalCount = feed?.meta.cachedCount ?? 0;
+  const expiredCount = feed?.meta.expiredCount ?? 0;
   const policy = feed?.policy ?? jobFreshnessPolicy;
   const policyText = fillTemplate(t("radar.policyText"), {
     hot: policy.hotWithinDays,
     normal: policy.normalWithinDays,
     stale: policy.staleWithinDays,
   });
-  const sourceStatus = feed
-    ? fillTemplate(t("radar.dataSourceBackend"), { source: feed.meta.sourceName || "Remotive" })
-    : t("radar.dataSourceFallback");
+  const sourceStatus = fillTemplate(t("radar.dataSourceBackend"), { source: feed?.meta.sourceName || "Remotive" });
   const sourceWarning = feedError ? fillTemplate(t("radar.syncWarning"), { message: feedError }) : "";
+  const sourceSearchScope = feed?.meta.searchQuery ? fillTemplate(t("radar.searchScope"), { query: feed.meta.searchQuery }) : "";
+  const sourceCacheStatus = feed ? t(feed.meta.cacheHit ? "radar.cacheHit" : "radar.cacheSynced") : "";
+  const sourceLastSyncAt = feed?.meta.syncedAt ?? feed?.meta.lastSyncedAt;
+  const sourceLastSync = sourceLastSyncAt ? fillTemplate(t("radar.lastSync"), { time: formatDateTime(sourceLastSyncAt, language) }) : "";
 
   const updateField = (field: keyof RadarForm) => (event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const value = field === "minScore" ? Number(event.target.value) : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const refreshSource = () => {
+    forceRefreshRef.current = true;
+    setRefreshNonce((current) => current + 1);
   };
 
   return (
@@ -212,9 +213,15 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
             </div>
             <div className="mt-4 space-y-2 text-[12px] leading-6 text-slate-500">
               <p>{policyText}</p>
-              <p className={cn("font-mono uppercase tracking-[0.16em]", isFallbackFeed ? "text-[var(--warning-orange)]" : "text-slate-400")}>{sourceStatus}</p>
+              <p className={cn("font-mono uppercase tracking-[0.16em]", !feed && feedError ? "text-[var(--warning-orange)]" : "text-slate-400")}>{sourceStatus}</p>
+              {sourceSearchScope ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">{sourceSearchScope}</p> : null}
+              {sourceCacheStatus ? <p className={cn("font-mono text-[11px] uppercase tracking-[0.14em]", feed?.meta.cacheHit ? "text-slate-500" : "text-[var(--cyber-green)]")}>{sourceCacheStatus}</p> : null}
+              {sourceLastSync ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{sourceLastSync}</p> : null}
               {isLoadingFeed ? <p className="text-[var(--trace-cyan)]">{t("radar.loadingSignals")}</p> : null}
               {sourceWarning ? <p className="text-[var(--warning-orange)]">{sourceWarning}</p> : null}
+              <button className="mt-2 w-full border border-[rgba(88,230,255,0.36)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50" disabled={isLoadingFeed} onClick={refreshSource} type="button">
+                {isLoadingFeed ? t("radar.refreshingSource") : t("radar.refreshSource")}
+              </button>
             </div>
           </aside>
 
@@ -440,4 +447,12 @@ function fillTemplate(template: string, values: Record<string, string | number>)
 
 function formatDate(value: string, language: string) {
   return new Intl.DateTimeFormat(language, { month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+function formatDateTime(value: string, language: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(language, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }

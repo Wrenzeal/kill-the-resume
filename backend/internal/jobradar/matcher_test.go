@@ -106,3 +106,58 @@ func makePosting(id, title, nature, location, requirements string, postedAt time
 		LastSeenAt:           postedAt,
 	}, time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC))
 }
+
+func TestBuildSearchScopeUsesSearchCriteriaAsIndependentCacheKey(t *testing.T) {
+	frontendScope := BuildSearchScope(SearchCriteria{
+		Keywords:        []string{"React", "Frontend"},
+		Locations:       []string{"Shanghai"},
+		CompanyNatures:  []string{"Non-outsourcing"},
+		RequiredSkills:  []string{"TypeScript"},
+		ExcludeKeywords: []string{"Onsite"},
+		MinScore:        80,
+	})
+	sameScope := BuildSearchScope(SearchCriteria{
+		Keywords:        []string{"Frontend", "React"},
+		Locations:       []string{"Shanghai"},
+		CompanyNatures:  []string{"Non-outsourcing"},
+		RequiredSkills:  []string{"TypeScript"},
+		ExcludeKeywords: []string{"Sales"},
+		MinScore:        20,
+	})
+	backendScope := BuildSearchScope(SearchCriteria{
+		Keywords:       []string{"Backend", "Java"},
+		Locations:      []string{"Shanghai"},
+		RequiredSkills: []string{"PostgreSQL"},
+	})
+
+	if frontendScope.Fingerprint == "" || frontendScope.Query == "" || len(frontendScope.Terms) == 0 {
+		t.Fatalf("expected complete search scope: %#v", frontendScope)
+	}
+	if frontendScope.Fingerprint != sameScope.Fingerprint {
+		t.Fatalf("exclude keywords and minScore should not create a new source cache scope: %q vs %q", frontendScope.Fingerprint, sameScope.Fingerprint)
+	}
+	if frontendScope.Fingerprint == backendScope.Fingerprint {
+		t.Fatalf("changing job keywords should create a different search cache scope")
+	}
+}
+
+func TestChineseBackendCriteriaExpandsForSourceAndMatching(t *testing.T) {
+	scope := BuildSearchScope(SearchCriteria{
+		Keywords:       []string{"后端", "Java"},
+		Locations:      []string{"深圳"},
+		RequiredSkills: []string{"PostgreSQL"},
+	})
+	if scope.Query != "后端 Java PostgreSQL 深圳" {
+		t.Fatalf("expected user-facing query to keep original criteria, got %q", scope.Query)
+	}
+	if len(scope.Terms) == 0 || scope.Terms[0] != "Backend" {
+		t.Fatalf("expected Chinese backend keyword to expand into source terms, got %#v", scope.Terms)
+	}
+
+	now := time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC)
+	posting := makePosting("backend", "Senior Backend Engineer", "Product Team", "Shenzhen", "Java\nPostgreSQL", now.Add(-1*day))
+	result := ScorePosting(posting, scope.Criteria, now)
+	if result.MatchPercent < 60 {
+		t.Fatalf("expected English source posting to match Chinese backend criteria, got %d", result.MatchPercent)
+	}
+}

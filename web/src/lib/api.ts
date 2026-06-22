@@ -168,8 +168,8 @@ export const apiClient = {
   deleteResume(token: string, resumeId: string) {
     return request<void>(`/resumes/${resumeId}`, { method: "DELETE", token });
   },
-  listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal) {
-    return request<JobRadarResponse>(buildJobRadarJobsPath(criteria), { signal });
+  listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
+    return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), { signal });
   },
 };
 
@@ -187,20 +187,28 @@ export type JobRadarResponse = {
   };
   meta: {
     sourceName: string;
+    searchFingerprint: string;
+    searchQuery: string;
     cachedCount: number;
     expiredCount: number;
     expiredDeleted: number;
+    cacheHit: boolean;
     syncedAt?: string;
+    lastSyncedAt?: string;
     syncError?: string;
   };
 };
 
-export function buildJobRadarJobsPath(criteria: Partial<JobRadarSearchCriteria>) {
-  const query = jobRadarCriteriaQuery(criteria);
+export type JobRadarListOptions = {
+  refresh?: boolean;
+};
+
+export function buildJobRadarJobsPath(criteria: Partial<JobRadarSearchCriteria>, options: JobRadarListOptions = {}) {
+  const query = jobRadarCriteriaQuery(criteria, options);
   return query ? `/job-radar/jobs?${query}` : "/job-radar/jobs";
 }
 
-function jobRadarCriteriaQuery(criteria: Partial<JobRadarSearchCriteria>) {
+function jobRadarCriteriaQuery(criteria: Partial<JobRadarSearchCriteria>, options: JobRadarListOptions) {
   const params = new URLSearchParams();
   appendTokenList(params, "keywords", criteria.keywords);
   appendTokenList(params, "locations", criteria.locations);
@@ -209,6 +217,9 @@ function jobRadarCriteriaQuery(criteria: Partial<JobRadarSearchCriteria>) {
   appendTokenList(params, "excludeKeywords", criteria.excludeKeywords);
   if (typeof criteria.minScore === "number" && Number.isFinite(criteria.minScore)) {
     params.set("minScore", String(Math.min(100, Math.max(0, Math.round(criteria.minScore)))));
+  }
+  if (options.refresh) {
+    params.set("refresh", "1");
   }
   return params.toString();
 }

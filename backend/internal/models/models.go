@@ -73,3 +73,40 @@ func (j *JobPosting) BeforeCreate(*gorm.DB) error {
 	}
 	return nil
 }
+
+type JobSearchCache struct {
+	ID                uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
+	SearchFingerprint string     `gorm:"type:varchar(80);not null;uniqueIndex" json:"searchFingerprint"`
+	SearchQuery       string     `gorm:"type:text;not null;default:''" json:"searchQuery"`
+	Criteria          JSONB      `gorm:"type:jsonb;not null" json:"criteria"`
+	SourceName        string     `gorm:"type:varchar(80);not null;default:''" json:"sourceName"`
+	LastSyncedAt      *time.Time `gorm:"index" json:"lastSyncedAt,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+func (j *JobSearchCache) BeforeCreate(*gorm.DB) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	return nil
+}
+
+type JobSearchResult struct {
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	SearchFingerprint string    `gorm:"type:varchar(80);not null;uniqueIndex:idx_job_search_result_scope;index" json:"searchFingerprint"`
+	JobPostingID      uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_job_search_result_scope;index" json:"jobPostingId"`
+	SourceName        string    `gorm:"type:varchar(80);not null;default:''" json:"sourceName"`
+	SourceJobID       string    `gorm:"type:varchar(255);not null;default:''" json:"sourceJobId"`
+	FirstSeenAt       time.Time `gorm:"not null;index" json:"firstSeenAt"`
+	LastSeenAt        time.Time `gorm:"not null;index" json:"lastSeenAt"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+func (j *JobSearchResult) BeforeCreate(*gorm.DB) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	return nil
+}

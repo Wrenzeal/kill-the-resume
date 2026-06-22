@@ -98,7 +98,10 @@ func (c *RemotiveClient) requestURL(query SourceQuery) (string, error) {
 		return "", err
 	}
 	values := parsed.Query()
-	search := strings.Join(DedupeTokens(append(query.Criteria.Keywords, query.Criteria.RequiredSkills...)), " ")
+	search := strings.Join(DedupeTokens(query.Terms), " ")
+	if search == "" {
+		search = strings.Join(DedupeTokens(append(query.Criteria.Keywords, query.Criteria.RequiredSkills...)), " ")
+	}
 	if search != "" {
 		values.Set("search", search)
 	}

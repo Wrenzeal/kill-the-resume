@@ -4,24 +4,30 @@ import { buildJobRadarJobsPath, resolveApiBaseUrlForEnvironment } from "@/lib/ap
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
-import { createDefaultJobRadarCriteria, createMockJobPostings, getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
+import { createDefaultJobRadarCriteria, getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
 import { defaultSkillLabels, joinSkillTags, normalizeSkillMatrix, normalizeSkillMatrixForPersistence, skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
 import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
 import { initialResumeDraft } from "@/lib/resume-defaults";
 import type { ResumeDraft } from "@/types/resume";
 
 
-test("job radar API path encodes manual criteria for backend search", () => {
+test("job radar API path encodes manual criteria and refresh flag for backend search", () => {
+  const criteria = {
+    keywords: ["Frontend", "React"],
+    locations: ["Shanghai", "Remote"],
+    companyNatures: ["Startup", "Non-outsourcing"],
+    requiredSkills: ["TypeScript", "PostgreSQL"],
+    excludeKeywords: ["Outsourcing", "Onsite"],
+    minScore: 45,
+  };
+
   assert.equal(
-    buildJobRadarJobsPath({
-      keywords: ["Frontend", "React"],
-      locations: ["Shanghai", "Remote"],
-      companyNatures: ["Startup", "Non-outsourcing"],
-      requiredSkills: ["TypeScript", "PostgreSQL"],
-      excludeKeywords: ["Outsourcing", "Onsite"],
-      minScore: 45,
-    }),
+    buildJobRadarJobsPath(criteria),
     "/job-radar/jobs?keywords=Frontend&keywords=React&locations=Shanghai&locations=Remote&companyNatures=Startup&companyNatures=Non-outsourcing&requiredSkills=TypeScript&requiredSkills=PostgreSQL&excludeKeywords=Outsourcing&excludeKeywords=Onsite&minScore=45",
+  );
+  assert.equal(
+    buildJobRadarJobsPath(criteria, { refresh: true }),
+    "/job-radar/jobs?keywords=Frontend&keywords=React&locations=Shanghai&locations=Remote&companyNatures=Startup&companyNatures=Non-outsourcing&requiredSkills=TypeScript&requiredSkills=PostgreSQL&excludeKeywords=Outsourcing&excludeKeywords=Onsite&minScore=45&refresh=1",
   );
 });
 
@@ -193,25 +199,18 @@ test("shared projection exposes skill display mode, columns, and categories", ()
 });
 
 
-test("job radar English mode uses localized defaults and mock display fields", () => {
-  const now = new Date("2026-06-22T12:00:00.000Z");
+test("job radar English mode uses localized default criteria without CJK text", () => {
   const criteria = createDefaultJobRadarCriteria("en-US");
-  const jobs = createMockJobPostings(now, "en-US");
-  const visibleValues = jobs.flatMap((job) => [
-    job.sourceName,
-    job.title,
-    job.companyName,
-    job.companyNature,
-    job.location,
-    job.salary,
-    job.description,
-    ...job.responsibilities,
-    ...job.requirements,
-  ]);
+  const visibleValues = [
+    ...criteria.keywords,
+    ...criteria.locations,
+    ...criteria.companyNatures,
+    ...criteria.requiredSkills,
+    ...criteria.excludeKeywords,
+  ];
 
   assert.deepEqual(criteria.keywords, ["Frontend", "React", "Next.js"]);
   assert.deepEqual(criteria.locations, ["Shanghai", "Remote"]);
-  assert.ok(jobs.some((job) => job.title.includes("Frontend")));
   assert.ok(visibleValues.every((value) => !containsCjk(value)), visibleValues.filter(containsCjk).join("\n"));
 });
 
