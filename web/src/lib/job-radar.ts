@@ -1,6 +1,14 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type JobFreshnessStatus = "hot" | "normal" | "stale" | "expired";
+export type JobMatchTagKind = "keyword" | "skill" | "location" | "company" | "risk" | "gap";
+export type JobMatchTagCode = "location-missing" | "skill-weak" | "salary-missing";
+
+export interface JobMatchTag {
+  kind: JobMatchTagKind;
+  label: string;
+  code?: JobMatchTagCode;
+}
 
 export const mockJobRadarSnapshotAt = "2026-06-22T12:00:00.000Z";
 
@@ -37,8 +45,8 @@ export interface JobPosting {
 export interface JobMatchResult extends Omit<JobPosting, "expiresAt"> {
   expiresAt: string;
   matchPercent: number;
-  matchTags: string[];
-  warningTags: string[];
+  matchTags: JobMatchTag[];
+  warningTags: JobMatchTag[];
   freshnessStatus: JobFreshnessStatus;
   freshnessLabel: string;
   freshnessRank: number;
@@ -370,18 +378,18 @@ export function scoreJobPosting(job: JobPosting, rawCriteria: Partial<JobRadarSe
   const penalty = Math.min(45, excludeMatches.length * 18);
   const matchPercent = Math.round(clamp(weightedScore + titleBonus - penalty, 0, 100));
 
-  const matchTags = unique([
-    ...keywordMatches.map((token) => `关键词:${token}`),
-    ...skillMatches.map((token) => `技能:${token}`),
-    ...locationMatches.map((token) => `地点:${token}`),
-    ...natureMatches.map((token) => `企业:${token}`),
+  const matchTags = uniqueTags([
+    ...keywordMatches.map((token) => createTag("keyword", token)),
+    ...skillMatches.map((token) => createTag("skill", token)),
+    ...locationMatches.map((token) => createTag("location", token)),
+    ...natureMatches.map((token) => createTag("company", token)),
   ]);
 
-  const warningTags = unique([
-    ...excludeMatches.map((token) => `排除:${token}`),
-    ...(criteria.locations.length > 0 && locationMatches.length === 0 ? ["地点未命中"] : []),
-    ...(criteria.requiredSkills.length > 0 && skillMatches.length === 0 ? ["技能弱匹配"] : []),
-    ...(job.salary.trim() ? [] : ["薪资未知"]),
+  const warningTags = uniqueTags([
+    ...excludeMatches.map((token) => createTag("risk", token)),
+    ...(criteria.locations.length > 0 && locationMatches.length === 0 ? [createTag("gap", "地点未命中", "location-missing")] : []),
+    ...(criteria.requiredSkills.length > 0 && skillMatches.length === 0 ? [createTag("gap", "技能弱匹配", "skill-weak")] : []),
+    ...(job.salary.trim() ? [] : [createTag("gap", "薪资未知", "salary-missing")]),
   ]);
 
   return {
@@ -482,8 +490,26 @@ function dedupeTokens(tokens: string[]) {
   return result;
 }
 
-function unique(values: string[]) {
-  return [...new Set(values)];
+function uniqueTags(tags: JobMatchTag[]) {
+  const seen = new Set<string>();
+  const result: JobMatchTag[] = [];
+
+  for (const tag of tags) {
+    const key = `${tag.kind}:${normalizeText(tag.label)}:${tag.code ?? ""}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(tag);
+  }
+
+  return result;
+}
+
+function createTag(kind: JobMatchTagKind, label: string, code?: JobMatchTagCode): JobMatchTag {
+  return { kind, label, code };
 }
 
 function ratio(hitCount: number, totalCount: number) {

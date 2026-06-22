@@ -239,7 +239,8 @@ test("job radar filters expired postings, ranks by match percent, and preserves 
   assert.equal(results[0]?.sourceUrl, "https://example.com/jobs/strong");
   assert.equal(results[0]?.freshnessStatus, "hot");
   assert.ok(results[0]!.matchPercent >= 80);
-  assert.ok(results[0]!.matchTags.includes("关键词:React"));
+  assert.ok(results[0]!.matchTags.some((tag) => tag.kind === "keyword" && tag.label === "React"));
+  assert.ok(results[0]!.matchTags.some((tag) => tag.kind === "skill" && tag.label === "TypeScript"));
 });
 
 test("job radar warning tags capture excluded keywords and lower risky matches", () => {
@@ -276,8 +277,9 @@ test("job radar warning tags capture excluded keywords and lower risky matches",
   const safeScore = scoreJobPosting(safe, criteria, now);
   const riskyScore = scoreJobPosting(risky, criteria, now);
 
-  assert.ok(riskyScore.warningTags.includes("排除:外包"));
-  assert.ok(riskyScore.warningTags.includes("排除:驻场"));
+  assert.ok(riskyScore.warningTags.some((tag) => tag.kind === "risk" && tag.label === "外包"));
+  assert.ok(riskyScore.warningTags.some((tag) => tag.kind === "risk" && tag.label === "驻场"));
+  assert.ok(riskyScore.warningTags.every((tag) => !tag.label.includes(":")));
   assert.ok(safeScore.matchPercent > riskyScore.matchPercent);
 });
 

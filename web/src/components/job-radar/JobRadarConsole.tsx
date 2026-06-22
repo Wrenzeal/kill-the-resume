@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
+import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
+import type { TranslationKey } from "@/lib/i18n";
 import {
   createDefaultJobRadarCriteria,
   createMockJobPostings,
@@ -12,6 +14,7 @@ import {
   mockJobRadarSnapshotAt,
   parseJobRadarInput,
   searchJobPostings,
+  type JobMatchTag,
   type JobMatchResult,
 } from "@/lib/job-radar";
 
@@ -41,7 +44,39 @@ const freshnessTone: Record<JobMatchResult["freshnessStatus"], string> = {
   expired: "border-slate-600 bg-slate-900 text-slate-500",
 };
 
+const freshnessLabelKeys: Record<JobMatchResult["freshnessStatus"], TranslationKey> = {
+  hot: "radar.freshnessHot",
+  normal: "radar.freshnessNormal",
+  stale: "radar.freshnessStale",
+  expired: "radar.freshnessExpired",
+};
+
+const tagLabelKeys: Record<JobMatchTag["kind"], TranslationKey> = {
+  keyword: "radar.legendKeyword",
+  skill: "radar.legendSkill",
+  location: "radar.legendLocation",
+  company: "radar.legendCompany",
+  risk: "radar.legendRisk",
+  gap: "radar.legendGap",
+};
+
+const gapTagLabelKeys: Record<NonNullable<JobMatchTag["code"]>, TranslationKey> = {
+  "location-missing": "radar.gapLocationMissing",
+  "skill-weak": "radar.gapSkillWeak",
+  "salary-missing": "radar.gapSalaryMissing",
+};
+
+const tagTone: Record<JobMatchTag["kind"], string> = {
+  keyword: "border-[rgba(88,230,255,0.34)] bg-[rgba(88,230,255,0.08)] text-[var(--trace-cyan)]",
+  skill: "border-[rgba(57,255,136,0.34)] bg-[rgba(57,255,136,0.08)] text-[var(--cyber-green)]",
+  location: "border-[rgba(129,140,248,0.38)] bg-[rgba(129,140,248,0.09)] text-indigo-300",
+  company: "border-[rgba(250,204,21,0.34)] bg-[rgba(250,204,21,0.08)] text-yellow-300",
+  risk: "border-[rgba(248,113,113,0.42)] bg-[rgba(248,113,113,0.09)] text-red-300",
+  gap: "border-[rgba(255,138,61,0.34)] bg-[rgba(255,138,61,0.08)] text-[var(--warning-orange)]",
+};
+
 export function JobRadarConsole() {
+  const { language, t } = useI18n();
   const now = useMemo(() => new Date(mockJobRadarSnapshotAt), []);
   const jobs = useMemo(() => createMockJobPostings(now), [now]);
   const [form, setForm] = useState<RadarForm>(initialForm);
@@ -57,6 +92,11 @@ export function JobRadarConsole() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const selected = results.find((job) => job.id === selectedId) ?? results[0];
   const expiredCount = useMemo(() => jobs.filter((job) => getFreshnessStatus(job, now) === "expired").length, [jobs, now]);
+  const policyText = fillTemplate(t("radar.policyText"), {
+    hot: jobFreshnessPolicy.hotWithinDays,
+    normal: jobFreshnessPolicy.normalWithinDays,
+    stale: jobFreshnessPolicy.staleWithinDays,
+  });
 
   const updateField = (field: keyof RadarForm) => (event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const value = field === "minScore" ? Number(event.target.value) : event.target.value;
@@ -73,19 +113,19 @@ export function JobRadarConsole() {
                 opportunity_radar / job_signal_console
               </p>
               <h1 className="mt-3 font-mono text-3xl font-black uppercase tracking-[-0.05em] md:text-5xl">
-                机会雷达
+                {t("radar.title")}
               </h1>
               <p className="mt-3 max-w-3xl text-[14px] leading-7 text-slate-400 md:text-[15px]">
-                牛马雷达已启动：先用 mock 网络岗位信号验证页面、匹配百分比、标签解释和岗位效期，后续可替换为后端真实岗位缓存。
+                {t("radar.description")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <LanguageToggle compact />
               <Link className="border border-slate-700 px-3 py-2 font-mono text-[12px] uppercase tracking-[0.24em] text-slate-300 transition hover:border-[var(--trace-cyan)] hover:text-[var(--trace-cyan)]" href="/">
-                返回首页
+                {t("radar.backHome")}
               </Link>
               <Link className="border border-[rgba(57,255,136,0.45)] px-3 py-2 font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.08)]" href="/editor">
-                简历控制台
+                {t("radar.editorConsole")}
               </Link>
             </div>
           </div>
@@ -93,16 +133,16 @@ export function JobRadarConsole() {
 
         <section className="grid gap-4 xl:grid-cols-[340px_minmax(460px,1fr)_390px]">
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">
-            <PanelTitle eyebrow="manual_signal_input" title="搜索条件" />
+            <PanelTitle eyebrow="manual_signal_input" title={t("radar.searchTitle")} />
             <div className="mt-4 space-y-4">
-              <RadarTextarea label="岗位关键字" value={form.keywords} onChange={updateField("keywords")} placeholder="前端, React, Next.js" />
-              <RadarTextarea label="工作地点" value={form.locations} onChange={updateField("locations")} placeholder="上海, 远程" rows={2} />
-              <RadarTextarea label="企业性质" value={form.companyNatures} onChange={updateField("companyNatures")} placeholder="外企, 创业公司, 非外包" rows={2} />
-              <RadarTextarea label="技术关键词" value={form.requiredSkills} onChange={updateField("requiredSkills")} placeholder="TypeScript, Node.js, PostgreSQL" />
-              <RadarTextarea label="排除关键词" value={form.excludeKeywords} onChange={updateField("excludeKeywords")} placeholder="外包, 驻场, 销售" rows={2} />
+              <RadarTextarea label={t("radar.keywords")} value={form.keywords} onChange={updateField("keywords")} placeholder="前端, React, Next.js" />
+              <RadarTextarea label={t("radar.locations")} value={form.locations} onChange={updateField("locations")} placeholder="上海, 远程" rows={2} />
+              <RadarTextarea label={t("radar.companyNature")} value={form.companyNatures} onChange={updateField("companyNatures")} placeholder="外企, 创业公司, 非外包" rows={2} />
+              <RadarTextarea label={t("radar.skills")} value={form.requiredSkills} onChange={updateField("requiredSkills")} placeholder="TypeScript, Node.js, PostgreSQL" />
+              <RadarTextarea label={t("radar.exclude")} value={form.excludeKeywords} onChange={updateField("excludeKeywords")} placeholder="外包, 驻场, 销售" rows={2} />
 
               <label className="block">
-                <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-slate-500">最低匹配度</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-slate-500">{t("radar.minScore")}</span>
                 <div className="mt-2 tactical-field px-3 py-3">
                   <input className="tactical-input accent-[var(--cyber-green)]" max={100} min={0} onChange={updateField("minScore")} type="range" value={form.minScore} />
                   <div className="mt-2 flex items-center justify-between font-mono text-[12px] text-slate-400">
@@ -119,15 +159,16 @@ export function JobRadarConsole() {
               <MetricBox label="matched" value={results.length} tone="green" />
             </div>
             <p className="mt-4 text-[12px] leading-6 text-slate-500">
-              效期策略：{jobFreshnessPolicy.hotWithinDays} 天内热点，{jobFreshnessPolicy.normalWithinDays} 天内一般，{jobFreshnessPolicy.staleWithinDays} 天内临期，之后从展示层过滤。
+              {policyText}
             </p>
           </aside>
 
           <section className="tactical-panel min-h-[680px] p-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <PanelTitle eyebrow="ranked_opportunity_feed" title="匹配岗位" />
+              <PanelTitle eyebrow="ranked_opportunity_feed" title={t("radar.matchesTitle")} />
               <p className="font-mono text-[12px] uppercase tracking-[0.22em] text-slate-500">sort: match_percent + freshness</p>
             </div>
+            <TagLegend />
 
             <div className="tactical-scrollbar mt-4 max-h-[calc(100vh-190px)] min-h-[560px] space-y-3 overflow-y-auto pr-2">
               {results.length ? results.map((job) => (
@@ -136,7 +177,7 @@ export function JobRadarConsole() {
                 <div className="flex min-h-[420px] items-center justify-center border border-dashed border-slate-700 text-center">
                   <div>
                     <p className="font-mono text-[13px] uppercase tracking-[0.3em] text-slate-500">no_signal</p>
-                    <p className="mt-3 text-sm text-slate-400">没有岗位达到当前匹配阈值，降低最低匹配度或减少排除关键词。</p>
+                    <p className="mt-3 text-sm text-slate-400">{t("radar.noSignal")}</p>
                   </div>
                 </div>
               )}
@@ -144,9 +185,9 @@ export function JobRadarConsole() {
           </section>
 
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">
-            <PanelTitle eyebrow="source_trace_detail" title="岗位详情" />
-            {selected ? <JobDetail job={selected} /> : (
-              <p className="mt-8 text-sm leading-7 text-slate-500">暂无可展示岗位。</p>
+            <PanelTitle eyebrow="source_trace_detail" title={t("radar.detailTitle")} />
+            {selected ? <JobDetail job={selected} language={language} /> : (
+              <p className="mt-8 text-sm leading-7 text-slate-500">{t("radar.emptyDetail")}</p>
             )}
           </aside>
         </section>
@@ -196,6 +237,8 @@ function MetricBox({ label, value, tone = "default" }: { label: string; value: n
 }
 
 function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: boolean; onSelect: () => void }) {
+  const { t } = useI18n();
+
   return (
     <article className={cn(
       "border bg-slate-950/45 p-4 transition",
@@ -210,23 +253,23 @@ function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: b
         </div>
         <div className="shrink-0 text-right font-mono">
           <div className="text-3xl font-black text-[var(--cyber-green)]">{job.matchPercent}%</div>
-          <div className={cn("mt-1 border px-2 py-1 text-[10px] uppercase tracking-[0.18em]", freshnessTone[job.freshnessStatus])}>{job.freshnessLabel}</div>
+          <div className={cn("mt-1 border px-2 py-1 text-[10px] uppercase tracking-[0.18em]", freshnessTone[job.freshnessStatus])}>{t(freshnessLabelKeys[job.freshnessStatus])}</div>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {job.matchTags.slice(0, 8).map((tag) => <Tag key={tag}>{tag}</Tag>)}
-        {job.warningTags.slice(0, 4).map((tag) => <Tag key={tag} tone="warning">{tag}</Tag>)}
+        {job.matchTags.slice(0, 8).map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
+        {job.warningTags.slice(0, 4).map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3">
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-500">{job.sourceName} / {job.sourceJobId}</p>
         <div className="flex items-center gap-2">
           <button className="border border-slate-700 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-slate-300 transition hover:border-[var(--trace-cyan)] hover:text-[var(--trace-cyan)]" onClick={onSelect} type="button">
-            查看详情
+            {t("radar.viewDetail")}
           </button>
           <a className="border border-[rgba(88,230,255,0.36)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)]" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
-            原站 ↗
+            {t("radar.sourceLinkShort")} ↗
           </a>
         </div>
       </div>
@@ -234,7 +277,9 @@ function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: b
   );
 }
 
-function JobDetail({ job }: { job: JobMatchResult }) {
+function JobDetail({ job, language }: { job: JobMatchResult; language: string }) {
+  const { t } = useI18n();
+
   return (
     <div className="mt-4 space-y-5">
       <div className="border border-slate-800 bg-slate-950/45 p-4">
@@ -248,27 +293,27 @@ function JobDetail({ job }: { job: JobMatchResult }) {
           <div className="font-mono text-3xl font-black text-[var(--cyber-green)]">{job.matchPercent}%</div>
         </div>
         <a className="mt-4 inline-flex border border-[rgba(57,255,136,0.42)] px-4 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.08)]" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
-          打开原始岗位 ↗
+          {t("radar.openSource")} ↗
         </a>
       </div>
 
       <div className="grid grid-cols-2 gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">
-        <InfoBox label="location" value={job.location} />
-        <InfoBox label="salary" value={job.salary} />
-        <InfoBox label="posted" value={formatDate(job.postedAt)} />
-        <InfoBox label="expires" value={formatDate(job.expiresAt)} />
+        <InfoBox label={t("radar.locationMeta")} value={job.location} />
+        <InfoBox label={t("radar.salaryMeta")} value={job.salary} />
+        <InfoBox label={t("radar.postedMeta")} value={formatDate(job.postedAt, language)} />
+        <InfoBox label={t("radar.expiresMeta")} value={formatDate(job.expiresAt, language)} />
       </div>
 
       <section>
-        <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">命中标签</h3>
+        <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">{t("radar.tagsTitle")}</h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          {job.matchTags.map((tag) => <Tag key={tag}>{tag}</Tag>)}
-          {job.warningTags.map((tag) => <Tag key={tag} tone="warning">{tag}</Tag>)}
+          {job.matchTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
+          {job.warningTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
         </div>
       </section>
 
-      <DetailList title="岗位任务" items={job.responsibilities} />
-      <DetailList title="岗位要求" items={job.requirements} />
+      <DetailList title={t("radar.responsibilities")} items={job.responsibilities} />
+      <DetailList title={t("radar.requirements")} items={job.requirements} />
 
       <section className="border border-slate-800 bg-slate-950/45 p-3">
         <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">source_trace</h3>
@@ -298,18 +343,46 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function Tag({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "warning" }) {
+function TagLegend() {
+  const { t } = useI18n();
+  const kinds: Array<JobMatchTag["kind"]> = ["keyword", "skill", "location", "company", "risk", "gap"];
+
+  return (
+    <div className="mt-4 border border-slate-800 bg-slate-950/45 p-3">
+      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">{t("radar.legendTitle")}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {kinds.map((kind) => (
+          <span className={cn("border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]", tagTone[kind])} key={kind}>
+            {t(tagLabelKeys[kind])}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Tag({ tag }: { tag: JobMatchTag }) {
+  const { t } = useI18n();
+  const label = tag.code ? t(gapTagLabelKeys[tag.code]) : tag.label;
+
   return (
     <span className={cn(
       "border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]",
-      tone === "default" && "border-[rgba(88,230,255,0.28)] bg-[rgba(88,230,255,0.07)] text-[var(--trace-cyan)]",
-      tone === "warning" && "border-[rgba(255,138,61,0.32)] bg-[rgba(255,138,61,0.08)] text-[var(--warning-orange)]",
+      tagTone[tag.kind],
     )}>
-      {children}
+      {label}
     </span>
   );
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date(value));
+function tagKey(tag: JobMatchTag) {
+  return `${tag.kind}:${tag.label}:${tag.code ?? ""}`;
+}
+
+function fillTemplate(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{{${key}}}`, String(value)), template);
+}
+
+function formatDate(value: string, language: string) {
+  return new Intl.DateTimeFormat(language, { month: "2-digit", day: "2-digit" }).format(new Date(value));
 }
