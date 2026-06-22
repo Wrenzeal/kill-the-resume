@@ -10,10 +10,13 @@ import type { Language, TranslationKey } from "@/lib/i18n";
 import {
   createDefaultJobRadarCriteria,
   jobFreshnessPolicy,
+  normalizeJobRadarCriteria,
   parseJobRadarInput,
   type JobMatchTag,
   type JobMatchResult,
+  type JobRadarSearchCriteria,
 } from "@/lib/job-radar";
+import { useCloudStore } from "@/store/cloud-store";
 
 type RadarForm = {
   keywords: string;
@@ -25,7 +28,7 @@ type RadarForm = {
 };
 
 
-function toRadarForm(criteria: ReturnType<typeof createDefaultJobRadarCriteria>): RadarForm {
+function toRadarForm(criteria: JobRadarSearchCriteria): RadarForm {
   return {
     keywords: criteria.keywords.join(", "),
     locations: criteria.locations.join(", "),
@@ -74,21 +77,50 @@ const tagTone: Record<JobMatchTag["kind"], string> = {
   gap: "border-[rgba(255,138,61,0.34)] bg-[rgba(255,138,61,0.08)] text-[var(--warning-orange)]",
 };
 
+type PreferenceStatus = "anonymous" | "loading" | "ready" | "restored" | "saved" | "error";
+
+type PreferenceLoadState = {
+  token: string | null;
+  status: PreferenceStatus;
+};
+
+const preferenceStatusKeys: Record<PreferenceStatus, TranslationKey> = {
+  anonymous: "radar.preferenceLoginHint",
+  loading: "radar.preferenceLoading",
+  ready: "radar.preferenceReady",
+  restored: "radar.preferenceRestored",
+  saved: "radar.preferenceSaved",
+  error: "radar.preferenceError",
+};
+
 export function JobRadarConsole() {
   const { language } = useI18n();
+  const token = useCloudStore((state) => state.token);
+  const userId = useCloudStore((state) => state.user?.id ?? null);
+  const sessionKey = token ? `auth:${userId ?? "session"}` : "guest";
 
-  return <JobRadarConsoleContent key={language} language={language} />;
+  return <JobRadarConsoleContent key={`${language}:${sessionKey}`} language={language} token={token} />;
 }
 
-function JobRadarConsoleContent({ language }: { language: Language }) {
+function JobRadarConsoleContent({ language, token }: { language: Language; token: string | null }) {
   const { t } = useI18n();
   const defaultCriteria = useMemo(() => createDefaultJobRadarCriteria(language), [language]);
   const [form, setForm] = useState<RadarForm>(() => toRadarForm(defaultCriteria));
   const [feed, setFeed] = useState<JobRadarResponse | null>(null);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
   const [feedError, setFeedError] = useState("");
+  const [preferenceLoad, setPreferenceLoad] = useState<PreferenceLoadState>(() => ({
+    token: token ?? null,
+    status: token ? "loading" : "anonymous",
+  }));
   const forceRefreshRef = useRef(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const preferenceStatus = token
+    ? (preferenceLoad.token === token ? preferenceLoad.status : "loading")
+    : "anonymous";
+  const preferenceReady = !token || (preferenceLoad.token === token && preferenceLoad.status !== "loading");
+  const preferenceLoadFailedRef = useRef(false);
+  const userEditedRef = useRef(false);
   const criteria = useMemo(() => ({
     keywords: parseJobRadarInput(form.keywords),
     locations: parseJobRadarInput(form.locations),
@@ -97,12 +129,66 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
     excludeKeywords: parseJobRadarInput(form.excludeKeywords),
     minScore: form.minScore,
   }), [form]);
+
   useEffect(() => {
+    const controller = new AbortController();
+
+    if (!token) {
+      return () => controller.abort();
+    }
+
+    apiClient.getJobRadarPreference(token, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (response.criteria) {
+          preferenceLoadFailedRef.current = false;
+          setForm(toRadarForm(normalizeJobRadarCriteria(response.criteria)));
+          setPreferenceLoad({ token, status: "restored" });
+        } else {
+          preferenceLoadFailedRef.current = false;
+          setForm(toRadarForm(defaultCriteria));
+          setPreferenceLoad({ token, status: "ready" });
+        }
+      })
+      .catch(() => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        preferenceLoadFailedRef.current = true;
+        setForm(toRadarForm(defaultCriteria));
+        setPreferenceLoad({ token, status: "error" });
+      });
+
+    return () => controller.abort();
+  }, [defaultCriteria, token]);
+
+  useEffect(() => {
+    if (!preferenceReady) {
+      return;
+    }
+
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       const forceRefresh = forceRefreshRef.current;
       forceRefreshRef.current = false;
       setIsLoadingFeed(true);
+      if (token && (!preferenceLoadFailedRef.current || userEditedRef.current)) {
+        void apiClient.saveJobRadarPreference(token, criteria, controller.signal)
+          .then(() => {
+            if (!controller.signal.aborted) {
+              preferenceLoadFailedRef.current = false;
+              userEditedRef.current = false;
+              setPreferenceLoad({ token, status: "saved" });
+            }
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) {
+              setPreferenceLoad({ token, status: "error" });
+            }
+          });
+      }
       apiClient.listJobRadarJobs(criteria, controller.signal, { refresh: forceRefresh })
         .then((response) => {
           setFeed(response);
@@ -126,7 +212,7 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [criteria, refreshNonce]);
+  }, [criteria, preferenceReady, refreshNonce, token]);
 
   const results = feed?.jobs ?? [];
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -145,9 +231,11 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
   const sourceCacheStatus = feed ? t(feed.meta.cacheHit ? "radar.cacheHit" : "radar.cacheSynced") : "";
   const sourceLastSyncAt = feed?.meta.syncedAt ?? feed?.meta.lastSyncedAt;
   const sourceLastSync = sourceLastSyncAt ? fillTemplate(t("radar.lastSync"), { time: formatDateTime(sourceLastSyncAt, language) }) : "";
+  const preferenceStatusText = t(preferenceStatusKeys[preferenceStatus]);
 
   const updateField = (field: keyof RadarForm) => (event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const value = field === "minScore" ? Number(event.target.value) : event.target.value;
+    userEditedRef.current = true;
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -217,6 +305,14 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
               {sourceSearchScope ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">{sourceSearchScope}</p> : null}
               {sourceCacheStatus ? <p className={cn("font-mono text-[11px] uppercase tracking-[0.14em]", feed?.meta.cacheHit ? "text-slate-500" : "text-[var(--cyber-green)]")}>{sourceCacheStatus}</p> : null}
               {sourceLastSync ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{sourceLastSync}</p> : null}
+              {preferenceStatusText ? <p className={cn(
+                "font-mono text-[11px] uppercase tracking-[0.14em]",
+                preferenceStatus === "error" && "text-[var(--warning-orange)]",
+                preferenceStatus === "loading" && "text-[var(--trace-cyan)]",
+                preferenceStatus === "restored" && "text-[var(--trace-cyan)]",
+                preferenceStatus === "saved" && "text-[var(--cyber-green)]",
+                (preferenceStatus === "anonymous" || preferenceStatus === "ready") && "text-slate-500",
+              )}>{preferenceStatusText}</p> : null}
               {isLoadingFeed ? <p className="text-[var(--trace-cyan)]">{t("radar.loadingSignals")}</p> : null}
               {sourceWarning ? <p className="text-[var(--warning-orange)]">{sourceWarning}</p> : null}
               <button className="mt-2 w-full border border-[rgba(88,230,255,0.36)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50" disabled={isLoadingFeed} onClick={refreshSource} type="button">

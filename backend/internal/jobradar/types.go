@@ -248,6 +248,17 @@ func CriteriaJSON(criteria SearchCriteria) models.JSONB {
 	return models.NewJSONB(raw)
 }
 
+func CriteriaFromJSON(raw models.JSONB) (SearchCriteria, error) {
+	if len(raw) == 0 {
+		return NormalizeCriteria(SearchCriteria{}), nil
+	}
+	var criteria SearchCriteria
+	if err := json.Unmarshal(raw, &criteria); err != nil {
+		return SearchCriteria{}, err
+	}
+	return NormalizeCriteria(criteria), nil
+}
+
 func NormalizeCriteria(criteria SearchCriteria) SearchCriteria {
 	return SearchCriteria{
 		Keywords:        DedupeTokens(criteria.Keywords),

@@ -4,11 +4,22 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"kill-the-resume/backend/internal/jobradar"
 
 	"github.com/gin-gonic/gin"
 )
+
+type jobRadarPreferenceRequest struct {
+	Criteria jobradar.SearchCriteria `json:"criteria"`
+}
+
+type jobRadarPreferenceMeta struct {
+	SearchFingerprint string    `json:"searchFingerprint"`
+	SearchQuery       string    `json:"searchQuery"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
 
 func (s *Server) listJobRadarJobs(c *gin.Context) {
 	if s.jobRadar == nil {
@@ -32,6 +43,54 @@ func (s *Server) listJobRadarJobs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) getJobRadarPreference(c *gin.Context) {
+	if s.jobRadar == nil {
+		writeError(c, http.StatusServiceUnavailable, "job radar service unavailable")
+		return
+	}
+
+	preference, found, err := s.jobRadar.GetPreference(c.Request.Context(), currentUserID(c))
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to load job radar preference")
+		return
+	}
+	if !found {
+		c.JSON(http.StatusOK, gin.H{"criteria": nil, "meta": nil})
+		return
+	}
+	c.JSON(http.StatusOK, jobRadarPreferenceResponse(preference))
+}
+
+func (s *Server) saveJobRadarPreference(c *gin.Context) {
+	if s.jobRadar == nil {
+		writeError(c, http.StatusServiceUnavailable, "job radar service unavailable")
+		return
+	}
+
+	var req jobRadarPreferenceRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	preference, err := s.jobRadar.SavePreference(c.Request.Context(), currentUserID(c), req.Criteria)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to save job radar preference")
+		return
+	}
+	c.JSON(http.StatusOK, jobRadarPreferenceResponse(preference))
+}
+
+func jobRadarPreferenceResponse(preference jobradar.Preference) gin.H {
+	return gin.H{
+		"criteria": preference.Criteria,
+		"meta": jobRadarPreferenceMeta{
+			SearchFingerprint: preference.SearchFingerprint,
+			SearchQuery:       preference.SearchQuery,
+			UpdatedAt:         preference.UpdatedAt,
+		},
+	}
 }
 
 func queryTokens(c *gin.Context, key string) []string {

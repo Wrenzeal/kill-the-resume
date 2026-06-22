@@ -32,6 +32,7 @@ CREATE SCHEMA IF NOT EXISTS kill_the_resume;
 - `job_postings`：机会雷达岗位缓存，保留来源、原站链接、发布时间、首次/最近发现时间、过期时间和新鲜度状态。
 - `job_search_caches`：机会雷达搜索条件缓存，按岗位关键字、技能、地点、企业性质生成搜索指纹，并保存原始条件 JSON 与最近同步时间。
 - `job_search_results`：机会雷达搜索结果关联表，把某个搜索指纹与真实岗位缓存关联，避免不同关键词共用同一批全局岗位。
+- `job_radar_preferences`：登录用户的机会雷达搜索条件偏好，每个用户一条，保存最近一次查询条件和对应搜索指纹。
 
 ## Environment
 
@@ -178,6 +179,32 @@ GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
 ```
 
 数据源合规约束：当前只接入 Remotive 公开 API，不抓取招聘网站页面；前端必须展示 `sourceName` 并把岗位标题/原站按钮链接到 `sourceUrl`，为 Remotive 导流。Remotive 官方文档说明公开 API 用于开发者分享岗位，要求标注来源和回链，且不应高频请求；默认每个搜索指纹最多 6 小时同步一次，避免超过其建议频率。
+
+登录用户的机会雷达搜索条件可保存到账户；前端会在查询时调用保存接口，并在下次进入页面时恢复：
+
+```http
+GET /api/v1/job-radar/preferences
+Authorization: Bearer <jwt>
+```
+
+```http
+PUT /api/v1/job-radar/preferences
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "criteria": {
+    "keywords": ["Backend", "Go"],
+    "locations": ["Remote"],
+    "companyNatures": ["Startup"],
+    "requiredSkills": ["PostgreSQL"],
+    "excludeKeywords": ["Onsite"],
+    "minScore": 50
+  }
+}
+```
+
+响应包含规范化后的 `criteria` 以及 `searchFingerprint`、`searchQuery`、`updatedAt` 元数据；未登录用户仍可使用公开岗位查询，但不会持久化搜索条件。
 
 ### Resumes
 

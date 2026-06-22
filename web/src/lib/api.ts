@@ -168,6 +168,17 @@ export const apiClient = {
   deleteResume(token: string, resumeId: string) {
     return request<void>(`/resumes/${resumeId}`, { method: "DELETE", token });
   },
+  getJobRadarPreference(token: string, signal?: AbortSignal) {
+    return request<JobRadarPreferenceResponse>("/job-radar/preferences", { token, signal });
+  },
+  saveJobRadarPreference(token: string, criteria: JobRadarSearchCriteria, signal?: AbortSignal) {
+    return request<JobRadarPreferenceResponse>("/job-radar/preferences", {
+      method: "PUT",
+      token,
+      body: { criteria },
+      signal,
+    });
+  },
   listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
     return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), { signal });
   },
@@ -197,6 +208,15 @@ export type JobRadarResponse = {
     lastSyncedAt?: string;
     syncError?: string;
   };
+};
+
+export type JobRadarPreferenceResponse = {
+  criteria: JobRadarSearchCriteria | null;
+  meta: {
+    searchFingerprint: string;
+    searchQuery: string;
+    updatedAt: string;
+  } | null;
 };
 
 export type JobRadarListOptions = {

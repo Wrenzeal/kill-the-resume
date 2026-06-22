@@ -68,6 +68,19 @@ var appMigrations = []appMigration{
 			`).Error
 		},
 	},
+	{
+		version:     "2026062203",
+		description: "persist user job radar search preferences",
+		run: func(tx *gorm.DB) error {
+			return tx.Exec(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_job_radar_preferences_user_id
+				ON job_radar_preferences (user_id);
+
+				CREATE INDEX IF NOT EXISTS idx_job_radar_preferences_updated
+				ON job_radar_preferences (updated_at DESC);
+			`).Error
+		},
+	},
 }
 
 func runMigrations(database *gorm.DB) error {

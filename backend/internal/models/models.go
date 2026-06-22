@@ -110,3 +110,20 @@ func (j *JobSearchResult) BeforeCreate(*gorm.DB) error {
 	}
 	return nil
 }
+
+type JobRadarPreference struct {
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID            uuid.UUID `gorm:"type:uuid;not null;uniqueIndex" json:"userId"`
+	Criteria          JSONB     `gorm:"type:jsonb;not null" json:"criteria"`
+	SearchFingerprint string    `gorm:"type:varchar(80);not null;default:''" json:"searchFingerprint"`
+	SearchQuery       string    `gorm:"type:text;not null;default:''" json:"searchQuery"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+func (j *JobRadarPreference) BeforeCreate(*gorm.DB) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	return nil
+}

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"kill-the-resume/backend/internal/models"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -24,6 +26,13 @@ type ServiceConfig struct {
 
 type SearchOptions struct {
 	ForceRefresh bool
+}
+
+type Preference struct {
+	Criteria          SearchCriteria `json:"criteria"`
+	SearchFingerprint string         `json:"searchFingerprint"`
+	SearchQuery       string         `json:"searchQuery"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
 }
 
 func NewService(repo *Repository, source SourceClient, cfg ServiceConfig) *Service {
@@ -115,6 +124,32 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 	}, nil
 }
 
+func (s *Service) SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (Preference, error) {
+	if s == nil || s.repo == nil {
+		return Preference{}, fmt.Errorf("job radar service is unavailable")
+	}
+	stored, err := s.repo.SavePreference(ctx, userID, criteria)
+	if err != nil {
+		return Preference{}, err
+	}
+	return preferenceFromModel(stored)
+}
+
+func (s *Service) GetPreference(ctx context.Context, userID uuid.UUID) (Preference, bool, error) {
+	if s == nil || s.repo == nil {
+		return Preference{}, false, fmt.Errorf("job radar service is unavailable")
+	}
+	stored, found, err := s.repo.GetPreference(ctx, userID)
+	if err != nil || !found {
+		return Preference{}, found, err
+	}
+	preference, err := preferenceFromModel(stored)
+	if err != nil {
+		return Preference{}, false, err
+	}
+	return preference, true, nil
+}
+
 func (s *Service) Sync(ctx context.Context, scope SearchScope) (SyncResult, error) {
 	if s == nil || s.repo == nil || s.source == nil {
 		return SyncResult{}, fmt.Errorf("job radar sync is unavailable")
@@ -152,5 +187,27 @@ func (s *Service) Sync(ctx context.Context, scope SearchScope) (SyncResult, erro
 		Linked:         linked,
 		ExpiredDeleted: deleted,
 		SyncedAt:       now,
+	}, nil
+}
+
+func preferenceFromModel(stored models.JobRadarPreference) (Preference, error) {
+	criteria, err := CriteriaFromJSON(stored.Criteria)
+	if err != nil {
+		return Preference{}, fmt.Errorf("decode job radar preference criteria: %w", err)
+	}
+	scope := BuildSearchScope(criteria)
+	fingerprint := stored.SearchFingerprint
+	if fingerprint == "" {
+		fingerprint = scope.Fingerprint
+	}
+	query := stored.SearchQuery
+	if query == "" {
+		query = scope.Query
+	}
+	return Preference{
+		Criteria:          criteria,
+		SearchFingerprint: fingerprint,
+		SearchQuery:       query,
+		UpdatedAt:         stored.UpdatedAt,
 	}, nil
 }

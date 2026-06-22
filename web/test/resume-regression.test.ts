@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildJobRadarJobsPath, resolveApiBaseUrlForEnvironment } from "@/lib/api";
+import { apiClient, buildJobRadarJobsPath, resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
@@ -29,6 +29,33 @@ test("job radar API path encodes manual criteria and refresh flag for backend se
     buildJobRadarJobsPath(criteria, { refresh: true }),
     "/job-radar/jobs?keywords=Frontend&keywords=React&locations=Shanghai&locations=Remote&companyNatures=Startup&companyNatures=Non-outsourcing&requiredSkills=TypeScript&requiredSkills=PostgreSQL&excludeKeywords=Outsourcing&excludeKeywords=Onsite&minScore=45&refresh=1",
   );
+});
+
+test("job radar preference API uses authenticated account endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ input: String(input), init: init ?? {} });
+    return new Response(JSON.stringify({ criteria: null, meta: null }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await apiClient.getJobRadarPreference("token-1");
+    const criteria = createDefaultJobRadarCriteria("en-US");
+    await apiClient.saveJobRadarPreference("token-1", criteria);
+
+    assert.equal(calls[0].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/preferences");
+    assert.equal((calls[0].init.headers as Headers).get("Authorization"), "Bearer token-1");
+    assert.equal(calls[1].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/preferences");
+    assert.equal(calls[1].init.method, "PUT");
+    assert.equal((calls[1].init.headers as Headers).get("Authorization"), "Bearer token-1");
+    assert.deepEqual(JSON.parse(String(calls[1].init.body)), { criteria });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("API base URL resolves for local, remote HTTP, and direct HTTPS production API", () => {

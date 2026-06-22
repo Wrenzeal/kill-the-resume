@@ -2,11 +2,13 @@ package jobradar
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"kill-the-resume/backend/internal/models"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -191,6 +193,54 @@ func (r *Repository) CachedCountForScope(ctx context.Context, scope SearchScope)
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *Repository) SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (models.JobRadarPreference, error) {
+	if userID == uuid.Nil {
+		return models.JobRadarPreference{}, fmt.Errorf("job radar preference user id is empty")
+	}
+
+	scope := BuildSearchScope(criteria)
+	now := time.Now().UTC()
+	preference := models.JobRadarPreference{
+		UserID:            userID,
+		Criteria:          CriteriaJSON(scope.Criteria),
+		SearchFingerprint: scope.Fingerprint,
+		SearchQuery:       scope.Query,
+	}
+	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"criteria":           CriteriaJSON(scope.Criteria),
+			"search_fingerprint": scope.Fingerprint,
+			"search_query":       scope.Query,
+			"updated_at":         now,
+		}),
+	}).Create(&preference).Error; err != nil {
+		return models.JobRadarPreference{}, fmt.Errorf("save job radar preference for user %s: %w", userID, err)
+	}
+
+	var stored models.JobRadarPreference
+	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&stored).Error; err != nil {
+		return models.JobRadarPreference{}, fmt.Errorf("load job radar preference for user %s: %w", userID, err)
+	}
+	return stored, nil
+}
+
+func (r *Repository) GetPreference(ctx context.Context, userID uuid.UUID) (models.JobRadarPreference, bool, error) {
+	if userID == uuid.Nil {
+		return models.JobRadarPreference{}, false, fmt.Errorf("job radar preference user id is empty")
+	}
+
+	var preference models.JobRadarPreference
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&preference).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.JobRadarPreference{}, false, nil
+	}
+	if err != nil {
+		return models.JobRadarPreference{}, false, fmt.Errorf("load job radar preference for user %s: %w", userID, err)
+	}
+	return preference, true, nil
 }
 
 func (r *Repository) ExpiredCountForScope(ctx context.Context, scope SearchScope, now time.Time) (int64, error) {

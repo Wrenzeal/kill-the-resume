@@ -161,3 +161,32 @@ func TestChineseBackendCriteriaExpandsForSourceAndMatching(t *testing.T) {
 		t.Fatalf("expected English source posting to match Chinese backend criteria, got %d", result.MatchPercent)
 	}
 }
+
+func TestPreferenceFromModelNormalizesSavedCriteriaAndScope(t *testing.T) {
+	updatedAt := time.Date(2026, 6, 22, 9, 30, 0, 0, time.UTC)
+	preference, err := preferenceFromModel(models.JobRadarPreference{
+		Criteria: CriteriaJSON(SearchCriteria{
+			Keywords:        []string{" 后端 ", "后端", "Backend"},
+			Locations:       []string{"深圳"},
+			RequiredSkills:  []string{"Go", "PostgreSQL"},
+			ExcludeKeywords: []string{"外包", "外包"},
+			MinScore:        120,
+		}),
+		UpdatedAt: updatedAt,
+	})
+	if err != nil {
+		t.Fatalf("expected preference decode to succeed: %v", err)
+	}
+	if preference.Criteria.MinScore != 100 {
+		t.Fatalf("expected min score to be clamped, got %d", preference.Criteria.MinScore)
+	}
+	if got := preference.Criteria.ExcludeKeywords; len(got) != 1 || got[0] != "外包" {
+		t.Fatalf("expected exclude keywords to be deduped, got %#v", got)
+	}
+	if preference.SearchFingerprint == "" || preference.SearchQuery == "" {
+		t.Fatalf("expected preference scope metadata to be derived: %#v", preference)
+	}
+	if !preference.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("expected updated timestamp to be preserved")
+	}
+}
