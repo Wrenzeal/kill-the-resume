@@ -1,6 +1,7 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type JobFreshnessStatus = "hot" | "normal" | "stale" | "expired";
+export type JobRadarLanguage = "zh-CN" | "en-US";
 export type JobMatchTagKind = "keyword" | "skill" | "location" | "company" | "risk" | "gap";
 export type JobMatchTagCode = "location-missing" | "skill-weak" | "salary-missing";
 
@@ -60,13 +61,6 @@ export const jobFreshnessPolicy = {
   deleteAfterDays: 60,
 } as const;
 
-export const freshnessLabels: Record<JobFreshnessStatus, string> = {
-  hot: "热点岗位",
-  normal: "一般岗位",
-  stale: "临期岗位",
-  expired: "过期岗位",
-};
-
 const freshnessRanks: Record<JobFreshnessStatus, number> = {
   hot: 4,
   normal: 3,
@@ -106,7 +100,18 @@ export function normalizeJobRadarCriteria(criteria: Partial<JobRadarSearchCriter
   };
 }
 
-export function createDefaultJobRadarCriteria(): JobRadarSearchCriteria {
+export function createDefaultJobRadarCriteria(language: JobRadarLanguage = "zh-CN"): JobRadarSearchCriteria {
+  if (isEnglishRadarLanguage(language)) {
+    return {
+      keywords: ["Frontend", "React", "Next.js"],
+      locations: ["Shanghai", "Remote"],
+      companyNatures: ["Foreign Company", "Startup", "Non-outsourcing"],
+      requiredSkills: ["TypeScript", "Node.js", "PostgreSQL"],
+      excludeKeywords: ["Outsourcing", "Onsite", "Sales"],
+      minScore: 45,
+    };
+  }
+
   return {
     keywords: ["前端", "React", "Next.js"],
     locations: ["上海", "远程"],
@@ -117,7 +122,7 @@ export function createDefaultJobRadarCriteria(): JobRadarSearchCriteria {
   };
 }
 
-export function createMockJobPostings(now = new Date()): JobPosting[] {
+export function createMockJobPostings(now = new Date(), language: JobRadarLanguage = "zh-CN"): JobPosting[] {
   const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * DAY_MS).toISOString();
 
   const postings: Array<Omit<JobPosting, "expiresAt"> & { expiresAt?: string }> = [
@@ -321,8 +326,139 @@ export function createMockJobPostings(now = new Date()): JobPosting[] {
     },
   ];
 
-  return postings.map((job) => ({ ...job, expiresAt: job.expiresAt ?? getJobDisplayExpiresAt(job) }));
+  const localizedPostings = isEnglishRadarLanguage(language)
+    ? postings.map((job) => ({ ...job, ...(englishMockJobOverrides[job.id] ?? {}) }))
+    : postings;
+
+  return localizedPostings.map((job) => ({ ...job, expiresAt: job.expiresAt ?? getJobDisplayExpiresAt(job) }));
 }
+
+const englishMockJobOverrides: Record<string, Partial<Pick<JobPosting, "sourceName" | "title" | "companyName" | "companyNature" | "location" | "salary" | "responsibilities" | "requirements" | "description" | "rawText">>> = {
+  "mock-zhipin-frontend-platform": {
+    sourceName: "Mock · Boss Zhipin",
+    title: "Senior Frontend Platform Engineer React / Next.js",
+    companyName: "Cloud Habitat Future Tech",
+    companyNature: "Startup / Non-outsourcing / Series A",
+    location: "Shanghai · Xuhui · Remote-friendly",
+    salary: "28k-45k · 14 months",
+    responsibilities: [
+      "Build a low-code B2B workspace and component system, turning repeated business UI into platform capabilities.",
+      "Own Next.js SSR, React state management, frontend performance metrics, and engineering quality gates.",
+      "Work with backend engineers on Node.js BFF boundaries, PostgreSQL queries, and permission design.",
+    ],
+    requirements: [
+      "Strong TypeScript, React, Next.js, and modern frontend engineering experience.",
+      "Understands API caching, first-screen performance, accessibility, and design-system architecture.",
+      "Node.js, PostgreSQL, or full-stack collaboration experience is a plus.",
+    ],
+    description: "Core R&D role, non-outsourcing, with TypeScript / React / Next.js / Node.js / PostgreSQL.",
+  },
+  "mock-lagou-fullstack-ai": {
+    sourceName: "Mock · Lagou",
+    title: "AI Product Full-stack Engineer",
+    companyName: "Matrix Resume Lab",
+    companyNature: "Early-stage Startup / Non-outsourcing",
+    location: "Hangzhou · Hybrid Remote",
+    responsibilities: [
+      "Build AI resume analysis, job recommendation, and user-growth tooling from zero to one.",
+      "Own the React frontend, Node.js service layer, PostgreSQL data model, and async job queues.",
+      "Partner with product on search, match percentage, tag explanation, and user feedback loops.",
+    ],
+    requirements: [
+      "Solid TypeScript foundation and ability to design React pages plus API contracts independently.",
+      "Comfortable with Node.js, PostgreSQL, queue jobs, or crawler data cleaning.",
+      "Interest in recruiting, resumes, search recommendation, or AI Agent scenarios.",
+    ],
+    description: "Prototype role aligned with Opportunity Radar, focused on AI, search recommendation, TypeScript, React, and Node.js.",
+  },
+  "mock-liepin-frontend-architect": {
+    sourceName: "Mock · Liepin",
+    title: "Frontend Architect / Design System",
+    companyName: "Northstar Data Intelligence",
+    companyNature: "Foreign Company / Non-outsourcing",
+    location: "Beijing · Chaoyang",
+    salary: "35k-55k · 15 months",
+    responsibilities: [
+      "Lead enterprise Design System work, micro-frontend frameworks, and large SPA performance governance.",
+      "Define React, TypeScript, testing, release, and observability engineering standards.",
+      "Drive component reuse, design collaboration, and engineering-efficiency metrics across distributed teams.",
+    ],
+    requirements: [
+      "8+ years frontend experience with React, TypeScript, build systems, and browser internals.",
+      "Experience in large B2B architecture, component libraries, internationalization, or accessibility.",
+      "Backend API design, Node.js BFF, or data-modeling experience is a plus.",
+    ],
+    description: "Core foreign-company engineering role focused on frontend architecture, React, TypeScript, and Design System.",
+  },
+  "mock-linkedin-remote-saas": {
+    sourceName: "Mock · LinkedIn",
+    companyNature: "Foreign Company / SaaS / Non-outsourcing",
+    location: "Remote · APAC",
+  },
+  "mock-kanzhun-backend-platform": {
+    sourceName: "Mock · Kanzhun",
+    title: "Node.js Backend Platform Engineer",
+    companyName: "Stackway Tech",
+    companyNature: "Private Company / Non-outsourcing",
+    location: "Shenzhen · Nanshan",
+    responsibilities: [
+      "Own Node.js APIs, PostgreSQL schema design, cache layers, and background jobs.",
+      "Support recruiting-data ingestion, cleaning, deduplication, and search-index writes.",
+      "Collaborate with frontend engineers on React admin consoles and data visualization experience.",
+    ],
+    requirements: [
+      "Strong Node.js, TypeScript, PostgreSQL, Redis, or message-queue experience.",
+      "Understands API security, data consistency, and task scheduling.",
+      "Search, recommendation, crawler, or recruiting-data experience is a plus.",
+    ],
+    description: "Backend and data-platform leaning role with Node.js / TypeScript / PostgreSQL and medium frontend relevance.",
+  },
+  "mock-51job-product-frontend": {
+    sourceName: "Mock · 51job",
+    title: "Mid-senior Frontend Engineer",
+    companyName: "Hylan Smart Manufacturing",
+    companyNature: "Public Company / In-house Product Team",
+    location: "Suzhou · Industrial Park",
+    salary: "18k-30k · 13 months",
+    responsibilities: [
+      "Build frontend features for internal production planning, supply-chain visualization, and reporting systems.",
+      "Maintain React component libraries, permission routing, table performance, and chart interactions.",
+      "Join API integration, requirement review, and production incident debugging.",
+    ],
+    requirements: [
+      "Strong JavaScript, TypeScript, React, Webpack, or Vite experience.",
+      "Understands backend APIs, SQL queries, or Node.js tooling scripts.",
+      "Manufacturing, supply-chain, or dashboard experience is a plus.",
+    ],
+    description: "In-house frontend role with React / TypeScript matches; location and company type may be weaker matches.",
+  },
+  "mock-risk-outsource-onsite": {
+    sourceName: "Mock · Aggregated Job Source",
+    title: "React Frontend Developer (Client-site Delivery)",
+    companyName: "Sharpwind Delivery Center",
+    companyNature: "Outsourcing Vendor",
+    location: "Shanghai · Pudong · Onsite",
+    responsibilities: [
+      "Deliver business pages, bug fixes, and handover documents according to client schedules.",
+      "Join onsite support, requirement communication, and project acceptance work.",
+    ],
+    requirements: [
+      "React, TypeScript, and common UI component library experience.",
+      "Accepts outsourcing projects and client-site work cadence.",
+    ],
+    description: "Matches React and Shanghai, but includes outsourcing and onsite risk keywords.",
+  },
+  "mock-expired-react-admin": {
+    sourceName: "Mock · Historical Cache",
+    title: "React Admin Console Engineer (Historical)",
+    companyName: "Expired Signal Sample",
+    companyNature: "Startup / Non-outsourcing",
+    location: "Shanghai",
+    responsibilities: ["Maintain React admin pages and shared components."],
+    requirements: ["TypeScript, React, Next.js."],
+    description: "Used to verify expired-job filtering; hidden from the default page.",
+  },
+};
 
 export function getFreshnessStatus(job: Pick<JobPosting, "postedAt" | "firstSeenAt">, now = new Date()): JobFreshnessStatus {
   const ageDays = getJobAgeDays(job, now);
@@ -399,7 +535,7 @@ export function scoreJobPosting(job: JobPosting, rawCriteria: Partial<JobRadarSe
     matchTags,
     warningTags,
     freshnessStatus,
-    freshnessLabel: freshnessLabels[freshnessStatus],
+    freshnessLabel: freshnessStatus,
     freshnessRank,
     sortScore: matchPercent + freshnessRank * 2,
   };
@@ -421,6 +557,11 @@ export function searchJobPostings(jobs: JobPosting[], rawCriteria: Partial<JobRa
       }
       return getJobSignalTime(b).getTime() - getJobSignalTime(a).getTime();
     });
+}
+
+
+function isEnglishRadarLanguage(language: JobRadarLanguage) {
+  return language === "en-US";
 }
 
 function getJobSignalTime(job: Pick<JobPosting, "postedAt" | "firstSeenAt">) {
@@ -450,7 +591,10 @@ function buildRiskText(job: JobPosting) {
     .replaceAll("非外包", "")
     .replaceAll("不外包", "")
     .replaceAll("无外包", "")
-    .replaceAll("不是外包", "");
+    .replaceAll("不是外包", "")
+    .replaceAll("non-outsourcing", "")
+    .replaceAll("non outsourcing", "")
+    .replaceAll("not outsourcing", "");
 }
 
 function collectMatches(tokens: string[], text: string) {

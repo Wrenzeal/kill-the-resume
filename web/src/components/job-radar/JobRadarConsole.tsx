@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
-import type { TranslationKey } from "@/lib/i18n";
+import type { Language, TranslationKey } from "@/lib/i18n";
 import {
   createDefaultJobRadarCriteria,
   createMockJobPostings,
@@ -27,15 +27,17 @@ type RadarForm = {
   minScore: number;
 };
 
-const defaultCriteria = createDefaultJobRadarCriteria();
-const initialForm: RadarForm = {
-  keywords: defaultCriteria.keywords.join(", "),
-  locations: defaultCriteria.locations.join(", "),
-  companyNatures: defaultCriteria.companyNatures.join(", "),
-  requiredSkills: defaultCriteria.requiredSkills.join(", "),
-  excludeKeywords: defaultCriteria.excludeKeywords.join(", "),
-  minScore: defaultCriteria.minScore,
-};
+
+function toRadarForm(criteria: ReturnType<typeof createDefaultJobRadarCriteria>): RadarForm {
+  return {
+    keywords: criteria.keywords.join(", "),
+    locations: criteria.locations.join(", "),
+    companyNatures: criteria.companyNatures.join(", "),
+    requiredSkills: criteria.requiredSkills.join(", "),
+    excludeKeywords: criteria.excludeKeywords.join(", "),
+    minScore: criteria.minScore,
+  };
+}
 
 const freshnessTone: Record<JobMatchResult["freshnessStatus"], string> = {
   hot: "border-[rgba(57,255,136,0.5)] bg-[rgba(57,255,136,0.1)] text-[var(--cyber-green)]",
@@ -76,10 +78,17 @@ const tagTone: Record<JobMatchTag["kind"], string> = {
 };
 
 export function JobRadarConsole() {
-  const { language, t } = useI18n();
+  const { language } = useI18n();
+
+  return <JobRadarConsoleContent key={language} language={language} />;
+}
+
+function JobRadarConsoleContent({ language }: { language: Language }) {
+  const { t } = useI18n();
   const now = useMemo(() => new Date(mockJobRadarSnapshotAt), []);
-  const jobs = useMemo(() => createMockJobPostings(now), [now]);
-  const [form, setForm] = useState<RadarForm>(initialForm);
+  const jobs = useMemo(() => createMockJobPostings(now, language), [language, now]);
+  const defaultCriteria = useMemo(() => createDefaultJobRadarCriteria(language), [language]);
+  const [form, setForm] = useState<RadarForm>(() => toRadarForm(defaultCriteria));
   const criteria = useMemo(() => ({
     keywords: parseJobRadarInput(form.keywords),
     locations: parseJobRadarInput(form.locations),
@@ -135,18 +144,18 @@ export function JobRadarConsole() {
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">
             <PanelTitle eyebrow="manual_signal_input" title={t("radar.searchTitle")} />
             <div className="mt-4 space-y-4">
-              <RadarTextarea label={t("radar.keywords")} value={form.keywords} onChange={updateField("keywords")} placeholder="前端, React, Next.js" />
-              <RadarTextarea label={t("radar.locations")} value={form.locations} onChange={updateField("locations")} placeholder="上海, 远程" rows={2} />
-              <RadarTextarea label={t("radar.companyNature")} value={form.companyNatures} onChange={updateField("companyNatures")} placeholder="外企, 创业公司, 非外包" rows={2} />
-              <RadarTextarea label={t("radar.skills")} value={form.requiredSkills} onChange={updateField("requiredSkills")} placeholder="TypeScript, Node.js, PostgreSQL" />
-              <RadarTextarea label={t("radar.exclude")} value={form.excludeKeywords} onChange={updateField("excludeKeywords")} placeholder="外包, 驻场, 销售" rows={2} />
+              <RadarTextarea label={t("radar.keywords")} value={form.keywords} onChange={updateField("keywords")} placeholder={t("radar.placeholderKeywords")} />
+              <RadarTextarea label={t("radar.locations")} value={form.locations} onChange={updateField("locations")} placeholder={t("radar.placeholderLocations")} rows={2} />
+              <RadarTextarea label={t("radar.companyNature")} value={form.companyNatures} onChange={updateField("companyNatures")} placeholder={t("radar.placeholderCompanyNature")} rows={2} />
+              <RadarTextarea label={t("radar.skills")} value={form.requiredSkills} onChange={updateField("requiredSkills")} placeholder={t("radar.placeholderSkills")} />
+              <RadarTextarea label={t("radar.exclude")} value={form.excludeKeywords} onChange={updateField("excludeKeywords")} placeholder={t("radar.placeholderExclude")} rows={2} />
 
               <label className="block">
                 <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-slate-500">{t("radar.minScore")}</span>
                 <div className="mt-2 tactical-field px-3 py-3">
                   <input className="tactical-input accent-[var(--cyber-green)]" max={100} min={0} onChange={updateField("minScore")} type="range" value={form.minScore} />
                   <div className="mt-2 flex items-center justify-between font-mono text-[12px] text-slate-400">
-                    <span>threshold</span>
+                    <span>{t("radar.threshold")}</span>
                     <input className="w-20 bg-transparent text-right text-[var(--cyber-green)] outline-none" max={100} min={0} onChange={updateField("minScore")} type="number" value={form.minScore} />
                   </div>
                 </div>
@@ -154,9 +163,9 @@ export function JobRadarConsole() {
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-2 text-center font-mono text-[11px] uppercase tracking-[0.16em]">
-              <MetricBox label="signals" value={jobs.length} />
-              <MetricBox label="expired" value={expiredCount} tone="warning" />
-              <MetricBox label="matched" value={results.length} tone="green" />
+              <MetricBox label={t("radar.metricSignals")} value={jobs.length} />
+              <MetricBox label={t("radar.metricExpired")} value={expiredCount} tone="warning" />
+              <MetricBox label={t("radar.metricMatched")} value={results.length} tone="green" />
             </div>
             <p className="mt-4 text-[12px] leading-6 text-slate-500">
               {policyText}
@@ -166,7 +175,7 @@ export function JobRadarConsole() {
           <section className="tactical-panel min-h-[680px] p-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <PanelTitle eyebrow="ranked_opportunity_feed" title={t("radar.matchesTitle")} />
-              <p className="font-mono text-[12px] uppercase tracking-[0.22em] text-slate-500">sort: match_percent + freshness</p>
+              <p className="font-mono text-[12px] uppercase tracking-[0.22em] text-slate-500">{t("radar.sortHint")}</p>
             </div>
             <TagLegend />
 

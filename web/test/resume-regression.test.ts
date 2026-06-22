@@ -4,7 +4,7 @@ import { resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
-import { getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
+import { createDefaultJobRadarCriteria, createMockJobPostings, getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
 import { defaultSkillLabels, joinSkillTags, normalizeSkillMatrix, normalizeSkillMatrixForPersistence, skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
 import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
 import { initialResumeDraft } from "@/lib/resume-defaults";
@@ -178,6 +178,29 @@ test("shared projection exposes skill display mode, columns, and categories", ()
   assert.deepEqual(projected.categories.map((category) => category.id), ["tools", "frontend", "ops"]);
 });
 
+
+test("job radar English mode uses localized defaults and mock display fields", () => {
+  const now = new Date("2026-06-22T12:00:00.000Z");
+  const criteria = createDefaultJobRadarCriteria("en-US");
+  const jobs = createMockJobPostings(now, "en-US");
+  const visibleValues = jobs.flatMap((job) => [
+    job.sourceName,
+    job.title,
+    job.companyName,
+    job.companyNature,
+    job.location,
+    job.salary,
+    job.description,
+    ...job.responsibilities,
+    ...job.requirements,
+  ]);
+
+  assert.deepEqual(criteria.keywords, ["Frontend", "React", "Next.js"]);
+  assert.deepEqual(criteria.locations, ["Shanghai", "Remote"]);
+  assert.ok(jobs.some((job) => job.title.includes("Frontend")));
+  assert.ok(visibleValues.every((value) => !containsCjk(value)), visibleValues.filter(containsCjk).join("\n"));
+});
+
 test("job radar freshness policy marks hot, normal, stale, and expired postings", () => {
   const now = new Date("2026-06-22T00:00:00.000Z");
   const signal = (daysAgo: number) => ({
@@ -305,4 +328,7 @@ function makeJobPosting(overrides: Partial<JobPosting>): JobPosting {
     fetchedAt: postedAt,
     ...overrides,
   };
+}
+function containsCjk(value: string) {
+  return /[\u3400-\u9fff]/u.test(value);
 }
