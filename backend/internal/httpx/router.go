@@ -11,6 +11,7 @@ import (
 
 	"kill-the-resume/backend/internal/auth"
 	"kill-the-resume/backend/internal/config"
+	"kill-the-resume/backend/internal/jobradar"
 	"kill-the-resume/backend/internal/models"
 
 	"github.com/gin-contrib/cors"
@@ -26,6 +27,7 @@ type Server struct {
 	auth            auth.Service
 	loginLimiter    *rateLimiter
 	registerLimiter *rateLimiter
+	jobRadar        *jobradar.Service
 }
 
 type publicUser struct {
@@ -90,11 +92,25 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	var radarService *jobradar.Service
+	if database != nil {
+		radarService = jobradar.NewService(
+			jobradar.NewRepository(database),
+			jobradar.NewRemotiveClient(cfg.JobRadarSourceURL, cfg.JobRadarHTTPTimeout),
+			jobradar.ServiceConfig{
+				SyncEnabled:  cfg.JobRadarSyncEnabled,
+				SyncInterval: cfg.JobRadarSyncInterval,
+				MaxResults:   cfg.JobRadarMaxResults,
+			},
+		)
+	}
+
 	server := &Server{
 		db:              database,
 		auth:            auth.NewService(cfg.JWTSecret, cfg.JWTTTL, cfg.JWTIssuer, cfg.JWTAudience),
 		loginLimiter:    newRateLimiter(cfg.AuthRateLimitMax, cfg.AuthRateLimitWindow),
 		registerLimiter: newRateLimiter(cfg.AuthRateLimitMax, cfg.AuthRateLimitWindow),
+		jobRadar:        radarService,
 	}
 
 	router.GET("/healthz", server.healthz)
@@ -104,6 +120,7 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	api := router.Group("/api/v1")
 	api.POST("/auth/register", server.register)
 	api.POST("/auth/login", server.login)
+	api.GET("/job-radar/jobs", server.listJobRadarJobs)
 
 	authed := api.Group("")
 	authed.Use(server.authMiddleware)

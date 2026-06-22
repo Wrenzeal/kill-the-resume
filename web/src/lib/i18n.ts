@@ -22,7 +22,7 @@ const zhCN = {
   "home.radarCta": "启动机会雷达",
 
   "radar.title": "机会雷达",
-  "radar.description": "牛马雷达已启动：先用 mock 网络岗位信号验证页面、匹配百分比、标签解释和岗位效期，后续可替换为后端真实岗位缓存。",
+  "radar.description": "牛马雷达已连接后端岗位缓存：按手动条件匹配真实招聘信号，输出匹配百分比、标签解释、岗位效期和原站链接。",
   "radar.backHome": "返回首页",
   "radar.editorConsole": "简历控制台",
   "radar.searchTitle": "搜索条件",
@@ -71,6 +71,10 @@ const zhCN = {
   "radar.freshnessNormal": "一般岗位",
   "radar.freshnessStale": "临期岗位",
   "radar.freshnessExpired": "过期岗位",
+  "radar.dataSourceBackend": "数据源：后端岗位缓存 / {{source}}",
+  "radar.dataSourceFallback": "数据源：本地 mock 降级预览",
+  "radar.loadingSignals": "正在同步真实岗位信号...",
+  "radar.syncWarning": "真实岗位同步告警：{{message}}",
 
   "status.operation": "System_Operation: 简历核心控制台",
   "status.route": "路由",
@@ -396,7 +400,7 @@ const enUS: Record<keyof typeof zhCN, string> = {
   "home.radarCta": "Launch Job Radar",
 
   "radar.title": "Opportunity Radar",
-  "radar.description": "Job Radar is running with mock network job signals so the page, match percentage, tag explanation, and freshness policy can be reviewed before backend-backed real job data replaces it.",
+  "radar.description": "Job Radar now reads the backend job cache, matches real recruiting signals against manual criteria, and keeps match percentages, tags, freshness, and source links visible.",
   "radar.backHome": "Home",
   "radar.editorConsole": "Resume Console",
   "radar.searchTitle": "Search Criteria",
@@ -445,6 +449,10 @@ const enUS: Record<keyof typeof zhCN, string> = {
   "radar.freshnessNormal": "Normal",
   "radar.freshnessStale": "Stale",
   "radar.freshnessExpired": "Expired",
+  "radar.dataSourceBackend": "Source: backend job cache / {{source}}",
+  "radar.dataSourceFallback": "Source: local mock fallback preview",
+  "radar.loadingSignals": "Syncing real job signals...",
+  "radar.syncWarning": "Real job sync warning: {{message}}",
 
   "status.operation": "System_Operation: Resume_Core_Console",
   "status.route": "ROUTE",

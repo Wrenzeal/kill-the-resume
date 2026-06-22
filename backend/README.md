@@ -29,6 +29,7 @@ CREATE SCHEMA IF NOT EXISTS kill_the_resume;
 
 - `users`
 - `resumes`
+- `job_postings`：机会雷达岗位缓存，保留来源、原站链接、发布时间、首次/最近发现时间、过期时间和新鲜度状态。
 
 ## Environment
 
@@ -49,6 +50,11 @@ CREATE SCHEMA IF NOT EXISTS kill_the_resume;
 | `AUTH_RATE_LIMIT_MAX` | `8` | 登录/注册限速窗口内最大尝试次数 |
 | `AUTH_RATE_LIMIT_WINDOW_MINUTES` | `15` | 登录/注册限速窗口分钟数 |
 | `CORS_ORIGINS` | localhost dev origins, including 3000/3001/3301/3302 | 前端来源白名单 |
+| `JOB_RADAR_SYNC_ENABLED` | `true` | 是否在查询机会雷达时按缓存新鲜度触发真实岗位源同步 |
+| `JOB_RADAR_SYNC_INTERVAL_MINUTES` | `360` | 机会雷达同步间隔；默认 6 小时，符合 Remotive 官方“不高频请求”的公开 API 使用建议 |
+| `JOB_RADAR_HTTP_TIMEOUT_SECONDS` | `10` | 拉取招聘数据源的 HTTP 超时 |
+| `JOB_RADAR_MAX_RESULTS` | `80` | 机会雷达接口返回的最大匹配岗位数 |
+| `JOB_RADAR_REMOTIVE_URL` | `https://remotive.com/api/remote-jobs` | Remotive 公开岗位 API 地址，可在测试中替换为 stub |
 
 > 如果使用 `DATABASE_URL`，请确保连接串包含正确数据库；当前默认推荐使用上方拆分变量，后端会自动设置 search_path 到 `DB_SCHEMA,public`。
 
@@ -122,6 +128,49 @@ Content-Type: application/json
 GET /api/v1/me
 Authorization: Bearer <jwt>
 ```
+
+### Opportunity Radar / Job Radar
+
+```http
+GET /api/v1/job-radar/jobs?keywords=Frontend&requiredSkills=TypeScript&locations=Remote&minScore=45
+```
+
+该接口公开读取后端岗位缓存，并在缓存为空或超过 `JOB_RADAR_SYNC_INTERVAL_MINUTES` 时按需从 Remotive 公开 API 同步真实岗位。响应示例：
+
+```json
+{
+  "jobs": [
+    {
+      "sourceName": "Remotive",
+      "sourceJobId": "2090887",
+      "sourceUrl": "https://remotive.com/remote-jobs/...",
+      "title": "React Engineer",
+      "matchPercent": 86,
+      "matchTags": [{ "kind": "skill", "label": "TypeScript" }],
+      "warningTags": [],
+      "freshnessStatus": "hot",
+      "postedAt": "2026-06-19T19:46:09Z",
+      "firstSeenAt": "2026-06-22T00:00:00Z",
+      "lastSeenAt": "2026-06-22T00:00:00Z",
+      "expiresAt": "2026-08-03T19:46:09Z"
+    }
+  ],
+  "policy": {
+    "hotWithinDays": 7,
+    "normalWithinDays": 30,
+    "staleWithinDays": 45,
+    "deleteAfterDays": 60
+  },
+  "meta": {
+    "sourceName": "Remotive",
+    "cachedCount": 30,
+    "expiredCount": 0,
+    "expiredDeleted": 0
+  }
+}
+```
+
+数据源合规约束：当前只接入 Remotive 公开 API，不抓取招聘网站页面；前端必须展示 `sourceName` 并把岗位标题/原站按钮链接到 `sourceUrl`，为 Remotive 导流。Remotive 官方文档说明公开 API 用于开发者分享岗位，要求标注来源和回链，且不应高频请求；默认 6 小时同步一次，避免超过其建议频率。
 
 ### Resumes
 

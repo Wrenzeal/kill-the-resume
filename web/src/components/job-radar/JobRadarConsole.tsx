@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
 import { useI18n } from "@/hooks/useI18n";
+import { apiClient, type JobRadarResponse } from "@/lib/api";
 import { cn } from "@/lib/css";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import {
@@ -86,9 +87,12 @@ export function JobRadarConsole() {
 function JobRadarConsoleContent({ language }: { language: Language }) {
   const { t } = useI18n();
   const now = useMemo(() => new Date(mockJobRadarSnapshotAt), []);
-  const jobs = useMemo(() => createMockJobPostings(now, language), [language, now]);
+  const fallbackJobs = useMemo(() => createMockJobPostings(now, language), [language, now]);
   const defaultCriteria = useMemo(() => createDefaultJobRadarCriteria(language), [language]);
   const [form, setForm] = useState<RadarForm>(() => toRadarForm(defaultCriteria));
+  const [feed, setFeed] = useState<JobRadarResponse | null>(null);
+  const [isLoadingFeed, setIsLoadingFeed] = useState(true);
+  const [feedError, setFeedError] = useState("");
   const criteria = useMemo(() => ({
     keywords: parseJobRadarInput(form.keywords),
     locations: parseJobRadarInput(form.locations),
@@ -97,15 +101,54 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
     excludeKeywords: parseJobRadarInput(form.excludeKeywords),
     minScore: form.minScore,
   }), [form]);
-  const results = useMemo(() => searchJobPostings(jobs, criteria, now), [criteria, jobs, now]);
+  const fallbackResults = useMemo(() => searchJobPostings(fallbackJobs, criteria, now), [criteria, fallbackJobs, now]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setIsLoadingFeed(true);
+      apiClient.listJobRadarJobs(criteria, controller.signal)
+        .then((response) => {
+          setFeed(response);
+          setFeedError(response.meta.syncError ?? "");
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          setFeed(null);
+          setFeedError(error instanceof Error ? error.message : "job radar backend unavailable");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsLoadingFeed(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [criteria]);
+
+  const isFallbackFeed = !feed;
+  const results = feed?.jobs ?? fallbackResults;
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const selected = results.find((job) => job.id === selectedId) ?? results[0];
-  const expiredCount = useMemo(() => jobs.filter((job) => getFreshnessStatus(job, now) === "expired").length, [jobs, now]);
+  const fallbackExpiredCount = useMemo(() => fallbackJobs.filter((job) => getFreshnessStatus(job, now) === "expired").length, [fallbackJobs, now]);
+  const signalCount = feed?.meta.cachedCount ?? fallbackJobs.length;
+  const expiredCount = feed?.meta.expiredCount ?? fallbackExpiredCount;
+  const policy = feed?.policy ?? jobFreshnessPolicy;
   const policyText = fillTemplate(t("radar.policyText"), {
-    hot: jobFreshnessPolicy.hotWithinDays,
-    normal: jobFreshnessPolicy.normalWithinDays,
-    stale: jobFreshnessPolicy.staleWithinDays,
+    hot: policy.hotWithinDays,
+    normal: policy.normalWithinDays,
+    stale: policy.staleWithinDays,
   });
+  const sourceStatus = feed
+    ? fillTemplate(t("radar.dataSourceBackend"), { source: feed.meta.sourceName || "Remotive" })
+    : t("radar.dataSourceFallback");
+  const sourceWarning = feedError ? fillTemplate(t("radar.syncWarning"), { message: feedError }) : "";
 
   const updateField = (field: keyof RadarForm) => (event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const value = field === "minScore" ? Number(event.target.value) : event.target.value;
@@ -163,13 +206,16 @@ function JobRadarConsoleContent({ language }: { language: Language }) {
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-2 text-center font-mono text-[11px] uppercase tracking-[0.16em]">
-              <MetricBox label={t("radar.metricSignals")} value={jobs.length} />
+              <MetricBox label={t("radar.metricSignals")} value={signalCount} />
               <MetricBox label={t("radar.metricExpired")} value={expiredCount} tone="warning" />
               <MetricBox label={t("radar.metricMatched")} value={results.length} tone="green" />
             </div>
-            <p className="mt-4 text-[12px] leading-6 text-slate-500">
-              {policyText}
-            </p>
+            <div className="mt-4 space-y-2 text-[12px] leading-6 text-slate-500">
+              <p>{policyText}</p>
+              <p className={cn("font-mono uppercase tracking-[0.16em]", isFallbackFeed ? "text-[var(--warning-orange)]" : "text-slate-400")}>{sourceStatus}</p>
+              {isLoadingFeed ? <p className="text-[var(--trace-cyan)]">{t("radar.loadingSignals")}</p> : null}
+              {sourceWarning ? <p className="text-[var(--warning-orange)]">{sourceWarning}</p> : null}
+            </div>
           </aside>
 
           <section className="tactical-panel min-h-[680px] p-4">

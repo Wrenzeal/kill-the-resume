@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveApiBaseUrlForEnvironment } from "@/lib/api";
+import { buildJobRadarJobsPath, resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
@@ -10,6 +10,20 @@ import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/
 import { initialResumeDraft } from "@/lib/resume-defaults";
 import type { ResumeDraft } from "@/types/resume";
 
+
+test("job radar API path encodes manual criteria for backend search", () => {
+  assert.equal(
+    buildJobRadarJobsPath({
+      keywords: ["Frontend", "React"],
+      locations: ["Shanghai", "Remote"],
+      companyNatures: ["Startup", "Non-outsourcing"],
+      requiredSkills: ["TypeScript", "PostgreSQL"],
+      excludeKeywords: ["Outsourcing", "Onsite"],
+      minScore: 45,
+    }),
+    "/job-radar/jobs?keywords=Frontend&keywords=React&locations=Shanghai&locations=Remote&companyNatures=Startup&companyNatures=Non-outsourcing&requiredSkills=TypeScript&requiredSkills=PostgreSQL&excludeKeywords=Outsourcing&excludeKeywords=Onsite&minScore=45",
+  );
+});
 
 test("API base URL resolves for local, remote HTTP, and direct HTTPS production API", () => {
   assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "https://api.killer.wrenzeal.top/api/v1");

@@ -36,6 +36,19 @@ var appMigrations = []appMigration{
 			`, "kill-the-resume.resume.v1", 1).Error
 		},
 	},
+	{
+		version:     "2026062201",
+		description: "ensure job radar cache query indexes",
+		run: func(tx *gorm.DB) error {
+			return tx.Exec(`
+				CREATE INDEX IF NOT EXISTS idx_job_postings_visible_feed
+				ON job_postings (expires_at, posted_at DESC, last_seen_at DESC);
+
+				CREATE INDEX IF NOT EXISTS idx_job_postings_sync_state
+				ON job_postings (fetched_at DESC);
+			`).Error
+		},
+	},
 }
 
 func runMigrations(database *gorm.DB) error {

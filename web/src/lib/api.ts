@@ -1,4 +1,5 @@
 import type { ResumeDraft } from "@/types/resume";
+import type { JobMatchResult, JobRadarSearchCriteria } from "@/lib/job-radar";
 
 const explicitApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const fallbackLocalApiBaseUrl = "http://127.0.0.1:19304/api/v1";
@@ -99,6 +100,7 @@ type RequestOptions = {
   token?: string | null;
   body?: unknown;
   method?: "GET" | "POST" | "PUT" | "DELETE";
+  signal?: AbortSignal;
 };
 
 export class ApiError extends Error {
@@ -125,6 +127,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     method: options.method ?? (options.body === undefined ? "GET" : "POST"),
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
   });
 
   if (response.status === 204) {
@@ -165,8 +168,56 @@ export const apiClient = {
   deleteResume(token: string, resumeId: string) {
     return request<void>(`/resumes/${resumeId}`, { method: "DELETE", token });
   },
+  listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal) {
+    return request<JobRadarResponse>(buildJobRadarJobsPath(criteria), { signal });
+  },
 };
 
 export function getApiBaseUrl() {
   return inferBrowserApiBaseUrl();
+}
+
+export type JobRadarResponse = {
+  jobs: JobMatchResult[];
+  policy: {
+    hotWithinDays: number;
+    normalWithinDays: number;
+    staleWithinDays: number;
+    deleteAfterDays: number;
+  };
+  meta: {
+    sourceName: string;
+    cachedCount: number;
+    expiredCount: number;
+    expiredDeleted: number;
+    syncedAt?: string;
+    syncError?: string;
+  };
+};
+
+export function buildJobRadarJobsPath(criteria: Partial<JobRadarSearchCriteria>) {
+  const query = jobRadarCriteriaQuery(criteria);
+  return query ? `/job-radar/jobs?${query}` : "/job-radar/jobs";
+}
+
+function jobRadarCriteriaQuery(criteria: Partial<JobRadarSearchCriteria>) {
+  const params = new URLSearchParams();
+  appendTokenList(params, "keywords", criteria.keywords);
+  appendTokenList(params, "locations", criteria.locations);
+  appendTokenList(params, "companyNatures", criteria.companyNatures);
+  appendTokenList(params, "requiredSkills", criteria.requiredSkills);
+  appendTokenList(params, "excludeKeywords", criteria.excludeKeywords);
+  if (typeof criteria.minScore === "number" && Number.isFinite(criteria.minScore)) {
+    params.set("minScore", String(Math.min(100, Math.max(0, Math.round(criteria.minScore)))));
+  }
+  return params.toString();
+}
+
+function appendTokenList(params: URLSearchParams, key: string, values: string[] | undefined) {
+  for (const value of values ?? []) {
+    const trimmed = value.trim();
+    if (trimmed) {
+      params.append(key, trimmed);
+    }
+  }
 }
