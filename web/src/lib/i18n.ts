@@ -19,6 +19,7 @@ const zhCN = {
   "home.title": "简历系统已过时。",
   "home.description": "欢迎来到你的简历杀手控制台。",
   "home.cta": "进入控制台",
+  "home.radarCta": "启动机会雷达",
 
   "status.operation": "System_Operation: 简历核心控制台",
   "status.route": "路由",
@@ -341,6 +342,7 @@ const enUS: Record<keyof typeof zhCN, string> = {
   "home.title": "Resume systems are obsolete.",
   "home.description": "Welcome to your resume killer console.",
   "home.cta": "Enter console",
+  "home.radarCta": "Launch Job Radar",
 
   "status.operation": "System_Operation: Resume_Core_Console",
   "status.route": "ROUTE",

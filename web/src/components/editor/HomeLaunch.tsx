@@ -21,12 +21,20 @@ export function HomeLaunch() {
       <p className="mt-4 text-[15px] leading-7 text-slate-400">
         {t("home.description")}
       </p>
-      <Link
-        href="/editor"
-        className="mt-8 inline-flex border border-[rgba(57,255,136,0.45)] px-5 py-3 font-mono text-[13px] uppercase tracking-[0.28em] text-[var(--cyber-green)] shadow-[0_0_24px_rgba(57,255,136,0.13)] transition hover:bg-[rgba(57,255,136,0.08)]"
-      >
-        {t("home.cta")}
-      </Link>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link
+          href="/editor"
+          className="inline-flex border border-[rgba(57,255,136,0.45)] px-5 py-3 font-mono text-[13px] uppercase tracking-[0.28em] text-[var(--cyber-green)] shadow-[0_0_24px_rgba(57,255,136,0.13)] transition hover:bg-[rgba(57,255,136,0.08)]"
+        >
+          {t("home.cta")}
+        </Link>
+        <Link
+          href="/job-radar"
+          className="inline-flex border border-[rgba(88,230,255,0.4)] px-5 py-3 font-mono text-[13px] uppercase tracking-[0.28em] text-[var(--trace-cyan)] shadow-[0_0_24px_rgba(88,230,255,0.1)] transition hover:bg-[rgba(88,230,255,0.08)]"
+        >
+          {t("home.radarCta")}
+        </Link>
+      </div>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from "@/lib/markdown";
+import { getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
 import { defaultSkillLabels, joinSkillTags, normalizeSkillMatrix, normalizeSkillMatrixForPersistence, skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
 import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
 import { initialResumeDraft } from "@/lib/resume-defaults";
@@ -176,3 +177,130 @@ test("shared projection exposes skill display mode, columns, and categories", ()
   assert.equal(projected.columnCount, 1);
   assert.deepEqual(projected.categories.map((category) => category.id), ["tools", "frontend", "ops"]);
 });
+
+test("job radar freshness policy marks hot, normal, stale, and expired postings", () => {
+  const now = new Date("2026-06-22T00:00:00.000Z");
+  const signal = (daysAgo: number) => ({
+    postedAt: new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+    firstSeenAt: new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+  });
+
+  assert.equal(getFreshnessStatus(signal(3), now), "hot");
+  assert.equal(getFreshnessStatus(signal(15), now), "normal");
+  assert.equal(getFreshnessStatus(signal(40), now), "stale");
+  assert.equal(getFreshnessStatus(signal(50), now), "expired");
+});
+
+test("job radar filters expired postings, ranks by match percent, and preserves source URLs", () => {
+  const now = new Date("2026-06-22T00:00:00.000Z");
+  const jobs: JobPosting[] = [
+    makeJobPosting({
+      id: "strong",
+      title: "高级前端工程师 React Next.js",
+      companyNature: "外企 / 非外包",
+      location: "上海 · 远程",
+      responsibilities: ["建设 React 控制台与 Next.js SSR 页面。"],
+      requirements: ["TypeScript、Node.js、PostgreSQL。"],
+      sourceUrl: "https://example.com/jobs/strong",
+      postedAt: "2026-06-20T00:00:00.000Z",
+    }),
+    makeJobPosting({
+      id: "weak",
+      title: "后端平台工程师",
+      companyNature: "民营公司",
+      location: "深圳",
+      responsibilities: ["维护 Java 服务。"],
+      requirements: ["Java、MySQL。"],
+      sourceUrl: "https://example.com/jobs/weak",
+      postedAt: "2026-06-19T00:00:00.000Z",
+    }),
+    makeJobPosting({
+      id: "expired",
+      title: "React 前端工程师",
+      companyNature: "外企 / 非外包",
+      location: "上海",
+      responsibilities: ["React、Next.js。"],
+      requirements: ["TypeScript。"],
+      sourceUrl: "https://example.com/jobs/expired",
+      postedAt: "2026-04-20T00:00:00.000Z",
+    }),
+  ];
+
+  const results = searchJobPostings(jobs, {
+    keywords: ["前端", "React", "Next.js"],
+    locations: ["上海", "远程"],
+    companyNatures: ["外企", "非外包"],
+    requiredSkills: ["TypeScript", "Node.js", "PostgreSQL"],
+    excludeKeywords: ["外包", "驻场"],
+    minScore: 10,
+  }, now);
+
+  assert.deepEqual(results.map((job) => job.id), ["strong"]);
+  assert.equal(results[0]?.sourceUrl, "https://example.com/jobs/strong");
+  assert.equal(results[0]?.freshnessStatus, "hot");
+  assert.ok(results[0]!.matchPercent >= 80);
+  assert.ok(results[0]!.matchTags.includes("关键词:React"));
+});
+
+test("job radar warning tags capture excluded keywords and lower risky matches", () => {
+  const now = new Date("2026-06-22T00:00:00.000Z");
+  const safe = makeJobPosting({
+    id: "safe",
+    title: "React 前端开发",
+    companyNature: "自研团队 / 非外包",
+    location: "上海",
+    responsibilities: ["React 和 TypeScript 产品研发。"],
+    requirements: ["React、TypeScript。"],
+    description: "自研产品岗位。",
+    postedAt: "2026-06-21T00:00:00.000Z",
+  });
+  const risky = makeJobPosting({
+    id: "risky",
+    title: "React 前端开发 驻场",
+    companyNature: "外包服务商",
+    location: "上海",
+    responsibilities: ["React 和 TypeScript 页面交付，客户现场驻场。"],
+    requirements: ["接受外包项目。"],
+    description: "外包驻场岗位。",
+    postedAt: "2026-06-21T00:00:00.000Z",
+  });
+  const criteria = {
+    keywords: ["React", "前端"],
+    locations: ["上海"],
+    companyNatures: ["自研"],
+    requiredSkills: ["TypeScript"],
+    excludeKeywords: ["外包", "驻场"],
+    minScore: 0,
+  };
+
+  const safeScore = scoreJobPosting(safe, criteria, now);
+  const riskyScore = scoreJobPosting(risky, criteria, now);
+
+  assert.ok(riskyScore.warningTags.includes("排除:外包"));
+  assert.ok(riskyScore.warningTags.includes("排除:驻场"));
+  assert.ok(safeScore.matchPercent > riskyScore.matchPercent);
+});
+
+function makeJobPosting(overrides: Partial<JobPosting>): JobPosting {
+  const postedAt = overrides.postedAt ?? "2026-06-20T00:00:00.000Z";
+
+  return {
+    id: "job",
+    sourceName: "Test Source",
+    sourceJobId: "source-1",
+    sourceUrl: "https://example.com/jobs/1",
+    title: "前端工程师",
+    companyName: "测试公司",
+    companyNature: "自研团队",
+    location: "上海",
+    salary: "20k-30k",
+    responsibilities: ["建设产品。"],
+    requirements: ["TypeScript。"],
+    description: "",
+    postedAt,
+    firstSeenAt: postedAt,
+    lastSeenAt: postedAt,
+    fetchedAt: postedAt,
+    ...overrides,
+  };
+}
