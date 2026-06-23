@@ -295,7 +295,7 @@ This file is the durable project memory for new Codex conversations. Read it bef
 - Backend normalizes project/work/education `period` fields on resume create/update so persisted JSONB uses `{ start, end, isPresent }` even when legacy string data is submitted, and stamps resume content with schema/version metadata.
 - Backend auth rate limiting is currently in-memory and per process; for multi-instance production, move it to Redis or gateway/WAF-level rate limiting.
 
-- `job-radar-extension/`: standalone Chrome/Edge Manifest V3 extension project for Opportunity Radar. It uses `activeTab`, `scripting`, and `storage` to read the current tab URL/title/selected text after user action, lets the user complete fields and criteria, and posts to `/api/v1/job-radar/import` with a `ktrp_` plugin token generated from the `/job-radar` page. It includes a Chinese README for local installation, permissions, token setup, and development checks.
+- `job-radar-extension/`: standalone Chrome/Edge Manifest V3 extension project for Opportunity Radar. It uses `activeTab`, `scripting`, and `storage` only after the user clicks the extension, reads the current job-detail page URL/title/canonical/page text/selected text, auto-fills posting fields with a Boss-first adapter plus Liepin/generic fallbacks, and posts to `/api/v1/job-radar/import` with a `ktrp_` plugin token generated from the `/job-radar` page. Manual fields remain as correction fallback, not the primary flow. It includes a Chinese README for local installation, permissions, token setup, and development checks.
 
 ## Current Verified Status
 

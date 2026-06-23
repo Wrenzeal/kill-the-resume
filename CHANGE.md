@@ -498,3 +498,8 @@
 - 修正机会雷达插件 Token 入口归属：从 `/editor` 账户与云端简历面板移除插件 Token 管理，改为在 `/job-radar` 机会雷达页面顶部生成、复制、刷新和撤销 `ktrp_` 插件专用 Token；简历页重新只负责账号/云端简历同步。
 - 同步更新插件 README、后端 README 与项目记忆，明确浏览器插件 Token 应从机会雷达页面获取，而不是简历编辑页面。
 - 本轮验证通过：`npm run web:lint`、`npm run web:typecheck`、`npm run web:test`、`npm run web:build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 升级机会雷达浏览器插件为当前页自动解析流程：插件版本提升到 `0.2.0`，用户点击插件后自动读取当前岗位详情页 URL、标题、canonical、页面文字和选中文本，并自动填充岗位名、公司、地点、薪资和正文。
+- 新增 Boss 直聘优先适配器、猎聘适配器和通用网页兜底解析；弹窗新增 `Re-read Page`，手动输入变为字段修正兜底，不再要求先选中文本再手动补全大部分内容。
+- 插件 README 与项目记忆同步更新，明确插件不批量抓取、不自动翻页、不后台静默采集，只在用户主动点击时解析当前页。
+- 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

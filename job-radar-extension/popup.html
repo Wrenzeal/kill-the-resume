@@ -83,7 +83,7 @@
     <header>
       <div class="eyebrow">kill_the_resume / job_radar_collector</div>
       <h1>Send Job to Radar</h1>
-      <p>选中招聘页面中的岗位正文，点击插件后补充字段并写入机会雷达。</p>
+      <p>打开岗位详情页后点击插件，它会自动读取当前页面的岗位名、公司、地点、薪资和正文；字段可手动修正后再写入机会雷达。</p>
     </header>
 
     <form id="collector-form">
@@ -91,7 +91,7 @@
         <input id="apiBaseUrl" placeholder="https://api.killer.wrenzeal.top/api/v1" />
       </label>
       <label>Plugin Token
-        <input id="token" type="password" placeholder="ktrp_...（在账号面板生成）" autocomplete="off" />
+        <input id="token" type="password" placeholder="ktrp_...（在 /job-radar 生成）" autocomplete="off" />
       </label>
       <div class="grid">
         <label>Source
@@ -138,11 +138,12 @@
         <input id="excludeKeywords" placeholder="外包, 驻场, 销售" />
       </label>
       <div class="actions">
+        <button id="auto-fill-page" type="button">Re-read Page</button>
         <button id="save-settings" type="button">Save</button>
         <button class="primary" id="send" type="submit">Send</button>
       </div>
       <div class="status" id="status"></div>
-      <p class="hint">权限说明：插件仅在你点击按钮后读取当前标签页 URL、标题和选中文本；插件 Token 只保存在浏览器本地扩展存储中，可在主站账号面板随时撤销。</p>
+      <p class="hint">权限说明：插件仅在你点击按钮后读取当前标签页 URL、标题、页面文字和选中文本；插件 Token 只保存在浏览器本地扩展存储中，可在 /job-radar 随时撤销。</p>
     </form>
   </main>
   <script src="popup.js"></script>
