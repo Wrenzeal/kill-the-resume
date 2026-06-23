@@ -56,7 +56,7 @@ func Connect(cfg config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
-	if err := gormDB.AutoMigrate(&models.User{}, &models.Resume{}, &models.JobPosting{}, &models.JobSearchCache{}, &models.JobSearchResult{}, &models.JobRadarPreference{}); err != nil {
+	if err := gormDB.AutoMigrate(&models.User{}, &models.Resume{}, &models.JobPosting{}, &models.JobSearchCache{}, &models.JobSearchResult{}, &models.JobRadarPreference{}, &models.JobRadarPluginToken{}); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}
 	if err := runMigrations(gormDB); err != nil {

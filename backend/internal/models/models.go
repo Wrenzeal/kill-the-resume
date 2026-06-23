@@ -127,3 +127,22 @@ func (j *JobRadarPreference) BeforeCreate(*gorm.DB) error {
 	}
 	return nil
 }
+
+type JobRadarPluginToken struct {
+	ID         uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID     uuid.UUID  `gorm:"type:uuid;not null;index:idx_job_radar_plugin_tokens_user_created" json:"userId"`
+	Name       string     `gorm:"type:varchar(120);not null;default:''" json:"name"`
+	TokenHash  string     `gorm:"type:char(64);not null;uniqueIndex" json:"-"`
+	LastUsedAt *time.Time `gorm:"index" json:"lastUsedAt,omitempty"`
+	ExpiresAt  *time.Time `gorm:"index" json:"expiresAt,omitempty"`
+	RevokedAt  *time.Time `gorm:"index" json:"revokedAt,omitempty"`
+	CreatedAt  time.Time  `gorm:"index:idx_job_radar_plugin_tokens_user_created,sort:desc" json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+}
+
+func (j *JobRadarPluginToken) BeforeCreate(*gorm.DB) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	return nil
+}

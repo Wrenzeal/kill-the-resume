@@ -81,6 +81,19 @@ var appMigrations = []appMigration{
 			`).Error
 		},
 	},
+	{
+		version:     "2026062301",
+		description: "add scoped job radar plugin tokens",
+		run: func(tx *gorm.DB) error {
+			return tx.Exec(`
+				CREATE INDEX IF NOT EXISTS idx_job_radar_plugin_tokens_user_active
+				ON job_radar_plugin_tokens (user_id, revoked_at, expires_at);
+
+				CREATE INDEX IF NOT EXISTS idx_job_radar_plugin_tokens_last_used
+				ON job_radar_plugin_tokens (last_used_at DESC);
+			`).Error
+		},
+	},
 }
 
 func runMigrations(database *gorm.DB) error {

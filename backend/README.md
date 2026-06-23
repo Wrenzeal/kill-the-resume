@@ -33,6 +33,7 @@ CREATE SCHEMA IF NOT EXISTS kill_the_resume;
 - `job_search_caches`：机会雷达搜索条件缓存，按岗位关键字、技能、地点、企业性质生成搜索指纹，并保存原始条件 JSON 与最近同步时间。
 - `job_search_results`：机会雷达搜索结果关联表，把某个搜索指纹与真实岗位缓存关联，避免不同关键词共用同一批全局岗位。
 - `job_radar_preferences`：登录用户的机会雷达搜索条件偏好，每个用户一条，保存最近一次查询条件和对应搜索指纹。
+- `job_radar_plugin_tokens`：机会雷达浏览器采集插件专用 Token，只存 SHA-256 hash，支持过期、撤销和最近使用时间。
 
 ## Environment
 
@@ -70,6 +71,7 @@ CREATE SCHEMA IF NOT EXISTS kill_the_resume;
 - 登录失败统一返回 `email or password is incorrect`，避免通过错误文案枚举账号。
 - 登录和注册使用内存限速，按 `IP` 与 `IP + email` 双维度限制；超限返回 `429` 与 `Retry-After`。
 - JWT 仅接受 HS256，并校验 `iss`、`aud`、`exp`、`nbf`；生产环境会拒绝默认/过短 `JWT_SECRET`。
+- 机会雷达浏览器插件使用 `ktrp_` 开头的专用 Token；后端只存 hash，专用 Token 只被 `/api/v1/job-radar/import` 接受，不能访问 `/resumes`、`/me` 或偏好接口。
 - 鉴权失败统一返回 `authentication required`，并设置 `WWW-Authenticate`。
 - 默认安全响应头：`Cache-Control: no-store`、`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Content-Security-Policy: frame-ancestors 'none'`、`Referrer-Policy: no-referrer`；生产环境额外设置 HSTS。
 - JSON API 要求 `Content-Type: application/json`，并启用请求体大小限制。
@@ -185,11 +187,11 @@ GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
 
 数据源合规约束：当前只接入 Remotive 公开 API，不抓取招聘网站页面；前端必须展示 `sourceName` 并把岗位标题/原站按钮链接到 `sourceUrl`，为 Remotive 导流。Remotive 官方文档说明公开 API 用于开发者分享岗位，要求标注来源和回链，且不应高频请求；默认每个搜索指纹最多 6 小时同步一次，避免超过其建议频率。
 
-登录用户还可以把招聘网站或公司官网中的真实岗位手动/插件导入当前搜索范围：
+登录用户还可以把招聘网站或公司官网中的真实岗位手动/插件导入当前搜索范围。该导入接口接受两种凭证：主站登录 JWT，或账号面板生成的 `ktrp_` 机会雷达插件专用 Token；插件专用 Token 只允许调用此导入接口。
 
 ```http
 POST /api/v1/job-radar/import
-Authorization: Bearer <jwt>
+Authorization: Bearer <jwt-or-ktrp-plugin-token>
 Content-Type: application/json
 
 {
@@ -212,6 +214,42 @@ Content-Type: application/json
 ```
 
 导入接口会生成稳定 `sourceJobId`，写入 `job_postings`，并关联到 `criteria` 对应的 `job_search_results`；响应返回该岗位在当前条件下的 `matchPercent`、标签与 `searchFingerprint`。导入写入会把该搜索范围标记为已同步，避免刚导入后下一次非强制查询立即触发远端同步并替换掉手动导入岗位；用户仍可点击 `refresh=1` 主动刷新线上源。
+
+插件 Token 管理接口需要正常登录 JWT，用于在主站账号面板生成、查看和撤销插件 Token。`token` 明文只在创建响应中返回一次，列表接口只返回元数据：
+
+```http
+GET /api/v1/job-radar/plugin-tokens
+Authorization: Bearer <jwt>
+```
+
+```http
+POST /api/v1/job-radar/plugin-tokens
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "name": "Chrome Job Radar Collector",
+  "expiresInDays": 90
+}
+```
+
+```json
+{
+  "token": "ktrp_...",
+  "meta": {
+    "id": "...",
+    "name": "Chrome Job Radar Collector",
+    "expiresAt": "2026-09-21T12:00:00Z",
+    "createdAt": "2026-06-23T12:00:00Z",
+    "updatedAt": "2026-06-23T12:00:00Z"
+  }
+}
+```
+
+```http
+DELETE /api/v1/job-radar/plugin-tokens/{id}
+Authorization: Bearer <jwt>
+```
 
 登录用户的机会雷达搜索条件可保存到账户；前端会在查询时调用保存接口，并在下次进入页面时恢复：
 

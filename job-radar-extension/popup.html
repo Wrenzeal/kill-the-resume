@@ -90,8 +90,8 @@
       <label>API Base URL
         <input id="apiBaseUrl" placeholder="https://api.killer.wrenzeal.top/api/v1" />
       </label>
-      <label>Bearer Token
-        <input id="token" type="password" placeholder="登录后的 JWT token" autocomplete="off" />
+      <label>Plugin Token
+        <input id="token" type="password" placeholder="ktrp_...（在账号面板生成）" autocomplete="off" />
       </label>
       <div class="grid">
         <label>Source
@@ -142,7 +142,7 @@
         <button class="primary" id="send" type="submit">Send</button>
       </div>
       <div class="status" id="status"></div>
-      <p class="hint">权限说明：插件仅在你点击按钮后读取当前标签页 URL、标题和选中文本；API Token 只保存在浏览器本地扩展存储中。</p>
+      <p class="hint">权限说明：插件仅在你点击按钮后读取当前标签页 URL、标题和选中文本；插件 Token 只保存在浏览器本地扩展存储中，可在主站账号面板随时撤销。</p>
     </form>
   </main>
   <script src="popup.js"></script>

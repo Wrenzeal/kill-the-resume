@@ -121,13 +121,16 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	api.POST("/auth/register", server.register)
 	api.POST("/auth/login", server.login)
 	api.GET("/job-radar/jobs", server.listJobRadarJobs)
+	api.POST("/job-radar/import", server.jobRadarImportAuthMiddleware, server.importJobRadarPosting)
 
 	authed := api.Group("")
 	authed.Use(server.authMiddleware)
 	authed.GET("/me", server.me)
-	authed.POST("/job-radar/import", server.importJobRadarPosting)
 	authed.GET("/job-radar/preferences", server.getJobRadarPreference)
 	authed.PUT("/job-radar/preferences", server.saveJobRadarPreference)
+	authed.GET("/job-radar/plugin-tokens", server.listJobRadarPluginTokens)
+	authed.POST("/job-radar/plugin-tokens", server.createJobRadarPluginToken)
+	authed.DELETE("/job-radar/plugin-tokens/:id", server.revokeJobRadarPluginToken)
 	authed.GET("/resumes", server.listResumes)
 	authed.POST("/resumes", server.createResume)
 	authed.GET("/resumes/:id", server.getResume)
@@ -408,16 +411,14 @@ func (s *Server) respondWithToken(c *gin.Context, status int, user models.User) 
 }
 
 func (s *Server) authMiddleware(c *gin.Context) {
-	header := strings.TrimSpace(c.GetHeader("Authorization"))
-	prefix := "Bearer "
-	if len(header) <= len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
+	token, ok := bearerTokenFromHeader(c.GetHeader("Authorization"))
+	if !ok {
 		auditAuth("bearer", c, "", "missing")
 		c.Header("WWW-Authenticate", `Bearer realm="kill-the-resume"`)
 		writeError(c, http.StatusUnauthorized, "authentication required")
 		c.Abort()
 		return
 	}
-	token := strings.TrimSpace(header[len(prefix):])
 	userID, err := s.auth.Parse(token)
 	if err != nil {
 		auditAuth("bearer", c, "", "invalid")
@@ -428,6 +429,19 @@ func (s *Server) authMiddleware(c *gin.Context) {
 	}
 	c.Set(userIDContextKey, userID)
 	c.Next()
+}
+
+func bearerTokenFromHeader(header string) (string, bool) {
+	header = strings.TrimSpace(header)
+	prefix := "Bearer "
+	if len(header) <= len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
+		return "", false
+	}
+	token := strings.TrimSpace(header[len(prefix):])
+	if token == "" {
+		return "", false
+	}
+	return token, true
 }
 
 func (s *Server) loadCurrentUser(c *gin.Context) (models.User, bool) {

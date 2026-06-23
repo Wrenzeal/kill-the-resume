@@ -96,6 +96,26 @@ export type AuthResponse = {
   user: ApiUser;
 };
 
+export type JobRadarPluginTokenMeta = {
+  id: string;
+  name: string;
+  lastUsedAt?: string;
+  expiresAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type JobRadarPluginTokenCreateInput = {
+  name?: string;
+  expiresInDays?: number;
+};
+
+export type JobRadarPluginTokenCreateResponse = {
+  token: string;
+  meta: JobRadarPluginTokenMeta;
+};
+
 type RequestOptions = {
   token?: string | null;
   body?: unknown;
@@ -187,6 +207,18 @@ export const apiClient = {
       body: input,
       signal,
     });
+  },
+  listJobRadarPluginTokens(token: string, signal?: AbortSignal) {
+    return request<{ tokens: JobRadarPluginTokenMeta[] }>("/job-radar/plugin-tokens", { token, signal });
+  },
+  createJobRadarPluginToken(token: string, input: JobRadarPluginTokenCreateInput) {
+    return request<JobRadarPluginTokenCreateResponse>("/job-radar/plugin-tokens", {
+      token,
+      body: input,
+    });
+  },
+  revokeJobRadarPluginToken(token: string, tokenId: string) {
+    return request<void>(`/job-radar/plugin-tokens/${tokenId}`, { method: "DELETE", token });
   },
   listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
     return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), {

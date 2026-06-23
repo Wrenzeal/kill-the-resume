@@ -76,7 +76,7 @@ form.addEventListener("submit", async (event) => {
   const token = fields.token.value.trim();
   const sourceUrl = fields.sourceUrl.value.trim();
   if (!token) {
-    setStatus("请先填写 Bearer Token。");
+    setStatus("请先填写插件 Token（ktrp_ 开头，可在 Kill The Resume 账号面板生成）。");
     return;
   }
   if (!sourceUrl) {

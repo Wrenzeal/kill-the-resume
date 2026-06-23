@@ -96,6 +96,64 @@ test("job radar preference API uses authenticated account endpoint", async () =>
   }
 });
 
+test("job radar plugin token API manages scoped extension tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ input: String(input), init: init ?? {} });
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({
+        tokens: [{
+          id: "token-id",
+          name: "Chrome Collector",
+          expiresAt: "2026-09-21T12:00:00Z",
+          createdAt: "2026-06-23T12:00:00Z",
+          updatedAt: "2026-06-23T12:00:00Z",
+        }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (calls.length === 2) {
+      return new Response(JSON.stringify({
+        token: "ktrp_test_secret",
+        meta: {
+          id: "new-token-id",
+          name: "Chrome Collector",
+          expiresAt: "2026-09-21T12:00:00Z",
+          createdAt: "2026-06-23T12:00:00Z",
+          updatedAt: "2026-06-23T12:00:00Z",
+        },
+      }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    const listed = await apiClient.listJobRadarPluginTokens("login-token");
+    const created = await apiClient.createJobRadarPluginToken("login-token", { name: "Chrome Collector", expiresInDays: 90 });
+    await apiClient.revokeJobRadarPluginToken("login-token", "new-token-id");
+
+    assert.equal(listed.tokens.length, 1);
+    assert.equal(Object.hasOwn(listed.tokens[0]!, "token"), false);
+    assert.equal(created.token, "ktrp_test_secret");
+    assert.equal(calls[0].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/plugin-tokens");
+    assert.equal((calls[0].init.headers as Headers).get("Authorization"), "Bearer login-token");
+    assert.equal(calls[1].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/plugin-tokens");
+    assert.equal(calls[1].init.method, "POST");
+    assert.deepEqual(JSON.parse(String(calls[1].init.body)), { name: "Chrome Collector", expiresInDays: 90 });
+    assert.equal(calls[2].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/plugin-tokens/new-token-id");
+    assert.equal(calls[2].init.method, "DELETE");
+    assert.equal((calls[2].init.headers as Headers).get("Authorization"), "Bearer login-token");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("job radar import API sends authenticated posting payload", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ input: string; init: RequestInit }> = [];
