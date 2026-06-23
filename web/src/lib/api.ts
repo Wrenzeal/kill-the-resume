@@ -101,6 +101,7 @@ type RequestOptions = {
   body?: unknown;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   signal?: AbortSignal;
+  cache?: RequestCache;
 };
 
 export class ApiError extends Error {
@@ -128,6 +129,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
+    cache: options.cache,
   });
 
   if (response.status === 204) {
@@ -180,7 +182,10 @@ export const apiClient = {
     });
   },
   listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
-    return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), { signal });
+    return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), {
+      signal,
+      cache: options.refresh ? "no-store" : undefined,
+    });
   },
 };
 
@@ -204,6 +209,10 @@ export type JobRadarResponse = {
     expiredCount: number;
     expiredDeleted: number;
     cacheHit: boolean;
+    forceRefresh: boolean;
+    fetchedCount: number;
+    upsertedCount: number;
+    linkedCount: number;
     syncedAt?: string;
     lastSyncedAt?: string;
     syncError?: string;

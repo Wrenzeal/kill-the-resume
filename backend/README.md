@@ -139,7 +139,7 @@ GET /api/v1/job-radar/jobs?keywords=Frontend&requiredSkills=TypeScript&locations
 GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
 ```
 
-该接口会先用岗位关键字、技术关键词、地点、企业性质生成 `searchFingerprint`，再只读取该搜索范围关联的岗位缓存；新关键词（例如从 Frontend 切到 Backend）会创建新的搜索缓存并按需从 Remotive 公开 API 抓取，而不是复用上一组全局缓存。`excludeKeywords` 与 `minScore` 只影响本地过滤/排序，不会制造新的抓取范围；`refresh=1` / `forceRefresh=true` 会强制刷新当前搜索范围。响应示例：
+该接口会先用岗位关键字、技术关键词、地点、企业性质生成 `searchFingerprint`，再只读取该搜索范围关联的岗位缓存；新关键词（例如从 Frontend 切到 Backend）会创建新的搜索缓存并按需从 Remotive 公开 API 抓取，而不是复用上一组全局缓存。`excludeKeywords` 与 `minScore` 只影响本地过滤/排序，不会制造新的抓取范围；`refresh=1` / `forceRefresh=true` 会强制访问 Remotive 线上岗位源，并用本次源站返回结果替换当前搜索范围关联，源站不可用时返回 `502`，不再静默回退旧缓存。响应示例：
 
 ```json
 {
@@ -172,7 +172,12 @@ GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
     "cachedCount": 30,
     "expiredCount": 0,
     "expiredDeleted": 0,
-    "cacheHit": true,
+    "cacheHit": false,
+    "forceRefresh": true,
+    "fetchedCount": 42,
+    "upsertedCount": 42,
+    "linkedCount": 30,
+    "syncedAt": "2026-06-22T06:00:00Z",
     "lastSyncedAt": "2026-06-22T06:00:00Z"
   }
 }

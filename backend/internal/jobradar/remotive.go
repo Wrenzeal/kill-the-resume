@@ -66,6 +66,10 @@ func (c *RemotiveClient) Fetch(ctx context.Context, query SourceQuery) ([]models
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "kill-the-resume-job-radar/0.1 (+https://killer.wrenzeal.top)")
+	if query.ForceRefresh {
+		request.Header.Set("Cache-Control", "no-cache")
+		request.Header.Set("Pragma", "no-cache")
+	}
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -107,6 +111,9 @@ func (c *RemotiveClient) requestURL(query SourceQuery) (string, error) {
 	}
 	if query.Limit > 0 {
 		values.Set("limit", strconv.Itoa(query.Limit))
+	}
+	if query.ForceRefresh {
+		values.Set("_ktr_refresh", strconv.FormatInt(time.Now().UnixNano(), 10))
 	}
 	parsed.RawQuery = values.Encode()
 	return parsed.String(), nil

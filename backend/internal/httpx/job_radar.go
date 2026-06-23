@@ -35,10 +35,15 @@ func (s *Server) listJobRadarJobs(c *gin.Context) {
 		ExcludeKeywords: queryTokens(c, "excludeKeywords"),
 		MinScore:        queryInt(c, "minScore", 0),
 	}
+	forceRefresh := queryBool(c, "refresh") || queryBool(c, "forceRefresh")
 	response, err := s.jobRadar.SearchWithOptions(c.Request.Context(), criteria, jobradar.SearchOptions{
-		ForceRefresh: queryBool(c, "refresh") || queryBool(c, "forceRefresh"),
+		ForceRefresh: forceRefresh,
 	})
 	if err != nil {
+		if forceRefresh {
+			writeError(c, http.StatusBadGateway, "failed to refresh online job source")
+			return
+		}
 		writeError(c, http.StatusInternalServerError, "failed to load job radar feed")
 		return
 	}

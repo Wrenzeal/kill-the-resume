@@ -229,6 +229,9 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
   const sourceWarning = feedError ? fillTemplate(t("radar.syncWarning"), { message: feedError }) : "";
   const sourceSearchScope = feed?.meta.searchQuery ? fillTemplate(t("radar.searchScope"), { query: feed.meta.searchQuery }) : "";
   const sourceCacheStatus = feed ? t(feed.meta.cacheHit ? "radar.cacheHit" : "radar.cacheSynced") : "";
+  const sourceRefreshResult = feed?.meta.forceRefresh && feed.meta.syncedAt
+    ? fillTemplate(t("radar.refreshResult"), { fetched: feed.meta.fetchedCount, linked: feed.meta.linkedCount })
+    : "";
   const sourceLastSyncAt = feed?.meta.syncedAt ?? feed?.meta.lastSyncedAt;
   const sourceLastSync = sourceLastSyncAt ? fillTemplate(t("radar.lastSync"), { time: formatDateTime(sourceLastSyncAt, language) }) : "";
   const preferenceStatusText = t(preferenceStatusKeys[preferenceStatus]);
@@ -304,6 +307,7 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
               <p className={cn("font-mono uppercase tracking-[0.16em]", !feed && feedError ? "text-[var(--warning-orange)]" : "text-slate-400")}>{sourceStatus}</p>
               {sourceSearchScope ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">{sourceSearchScope}</p> : null}
               {sourceCacheStatus ? <p className={cn("font-mono text-[11px] uppercase tracking-[0.14em]", feed?.meta.cacheHit ? "text-slate-500" : "text-[var(--cyber-green)]")}>{sourceCacheStatus}</p> : null}
+              {sourceRefreshResult ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--cyber-green)]">{sourceRefreshResult}</p> : null}
               {sourceLastSync ? <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{sourceLastSync}</p> : null}
               {preferenceStatusText ? <p className={cn(
                 "font-mono text-[11px] uppercase tracking-[0.14em]",

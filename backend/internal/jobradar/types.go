@@ -94,6 +94,10 @@ type SearchMeta struct {
 	ExpiredCount      int64      `json:"expiredCount"`
 	ExpiredDeleted    int64      `json:"expiredDeleted"`
 	CacheHit          bool       `json:"cacheHit"`
+	ForceRefresh      bool       `json:"forceRefresh"`
+	FetchedCount      int        `json:"fetchedCount"`
+	UpsertedCount     int        `json:"upsertedCount"`
+	LinkedCount       int        `json:"linkedCount"`
 	SyncedAt          *time.Time `json:"syncedAt,omitempty"`
 	LastSyncedAt      *time.Time `json:"lastSyncedAt,omitempty"`
 	SyncError         string     `json:"syncError,omitempty"`
@@ -118,9 +122,10 @@ type SourceClient interface {
 }
 
 type SourceQuery struct {
-	Criteria SearchCriteria
-	Terms    []string
-	Limit    int
+	Criteria     SearchCriteria
+	Terms        []string
+	Limit        int
+	ForceRefresh bool
 }
 
 func BuildSearchScope(criteria SearchCriteria) SearchScope {

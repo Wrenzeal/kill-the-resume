@@ -93,9 +93,14 @@ func (r *Repository) MarkSearchSynced(ctx context.Context, scope SearchScope, sy
 }
 
 func (r *Repository) UpsertManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time) (int, int, error) {
-	if len(jobs) == 0 {
-		return 0, 0, nil
-	}
+	return r.storeManyForScope(ctx, scope, jobs, seenAt, false)
+}
+
+func (r *Repository) ReplaceManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time) (int, int, error) {
+	return r.storeManyForScope(ctx, scope, jobs, seenAt, true)
+}
+
+func (r *Repository) storeManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time, replaceScope bool) (int, int, error) {
 	if scope.Fingerprint == "" {
 		return 0, 0, fmt.Errorf("job radar search fingerprint is empty")
 	}
@@ -106,6 +111,12 @@ func (r *Repository) UpsertManyForScope(ctx context.Context, scope SearchScope, 
 	validCount := 0
 	linkedCount := 0
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if replaceScope {
+			if err := tx.Where("search_fingerprint = ?", scope.Fingerprint).Delete(&models.JobSearchResult{}).Error; err != nil {
+				return fmt.Errorf("replace job search results for %s: %w", scope.Fingerprint, err)
+			}
+		}
+
 		for _, job := range jobs {
 			if job.SourceName == "" || job.SourceJobID == "" || job.SourceURL == "" || job.Title == "" {
 				continue

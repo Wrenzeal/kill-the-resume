@@ -53,3 +53,25 @@ func TestRemotiveClientMapsPublicAPIResponseToJobPostings(t *testing.T) {
 		t.Fatalf("expected lifecycle fields: %#v", job)
 	}
 }
+
+func TestRemotiveClientForceRefreshBypassesIntermediaryCaches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Cache-Control"); got != "no-cache" {
+			t.Fatalf("expected no-cache Cache-Control header, got %q", got)
+		}
+		if got := r.Header.Get("Pragma"); got != "no-cache" {
+			t.Fatalf("expected no-cache Pragma header, got %q", got)
+		}
+		if got := r.URL.Query().Get("_ktr_refresh"); got == "" {
+			t.Fatal("expected refresh cache-buster query parameter")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"job-count": 0, "jobs": []}`))
+	}))
+	defer server.Close()
+
+	client := NewRemotiveClient(server.URL, time.Second)
+	if _, err := client.Fetch(context.Background(), SourceQuery{Terms: []string{"Backend"}, Limit: 1, ForceRefresh: true}); err != nil {
+		t.Fatalf("force refresh fetch failed: %v", err)
+	}
+}

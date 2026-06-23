@@ -11,11 +11,24 @@ import (
 )
 
 type Service struct {
-	repo         *Repository
+	repo         radarRepository
 	source       SourceClient
 	syncEnabled  bool
 	syncInterval time.Duration
 	maxResults   int
+}
+
+type radarRepository interface {
+	EnsureSearchCache(ctx context.Context, scope SearchScope) (models.JobSearchCache, error)
+	NeedsSearchSync(ctx context.Context, scope SearchScope, now time.Time, interval time.Duration, force bool) (models.JobSearchCache, bool, error)
+	MarkSearchSynced(ctx context.Context, scope SearchScope, syncedAt time.Time) error
+	ReplaceManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time) (int, int, error)
+	ListVisibleForScope(ctx context.Context, scope SearchScope, now time.Time, limit int) ([]models.JobPosting, error)
+	CachedCountForScope(ctx context.Context, scope SearchScope) (int64, error)
+	ExpiredCountForScope(ctx context.Context, scope SearchScope, now time.Time) (int64, error)
+	CleanupExpired(ctx context.Context, now time.Time) (int64, error)
+	SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (models.JobRadarPreference, error)
+	GetPreference(ctx context.Context, userID uuid.UUID) (models.JobRadarPreference, bool, error)
 }
 
 type ServiceConfig struct {
@@ -42,8 +55,12 @@ func NewService(repo *Repository, source SourceClient, cfg ServiceConfig) *Servi
 	if cfg.MaxResults <= 0 {
 		cfg.MaxResults = 80
 	}
+	var store radarRepository
+	if repo != nil {
+		store = repo
+	}
 	return &Service{
-		repo:         repo,
+		repo:         store,
 		source:       source,
 		syncEnabled:  cfg.SyncEnabled,
 		syncInterval: cfg.SyncInterval,
@@ -66,6 +83,7 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 		SourceName:        SourceRemotive,
 		SearchFingerprint: scope.Fingerprint,
 		SearchQuery:       scope.Query,
+		ForceRefresh:      options.ForceRefresh,
 	}
 
 	cache, err := s.repo.EnsureSearchCache(ctx, scope)
@@ -80,6 +98,10 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 	}
 	meta.ExpiredDeleted = deleted
 
+	if options.ForceRefresh && (!s.syncEnabled || s.source == nil) {
+		return SearchResponse{}, fmt.Errorf("online job refresh is unavailable")
+	}
+
 	if s.syncEnabled && s.source != nil {
 		cache, needsSync, err := s.repo.NeedsSearchSync(ctx, scope, now, s.syncInterval, options.ForceRefresh)
 		if err != nil {
@@ -88,13 +110,19 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 		meta.LastSyncedAt = cache.LastSyncedAt
 		meta.CacheHit = !needsSync && cache.LastSyncedAt != nil
 		if needsSync {
-			result, err := s.Sync(ctx, scope)
+			result, err := s.Sync(ctx, scope, SearchOptions{ForceRefresh: options.ForceRefresh})
 			if err != nil {
+				if options.ForceRefresh {
+					return SearchResponse{}, fmt.Errorf("refresh online job source: %w", err)
+				}
 				meta.SyncError = err.Error()
 			} else {
 				meta.SyncedAt = &result.SyncedAt
 				meta.LastSyncedAt = &result.SyncedAt
 				meta.CacheHit = false
+				meta.FetchedCount = result.Fetched
+				meta.UpsertedCount = result.Upserted
+				meta.LinkedCount = result.Linked
 				meta.ExpiredDeleted += result.ExpiredDeleted
 			}
 		}
@@ -150,15 +178,24 @@ func (s *Service) GetPreference(ctx context.Context, userID uuid.UUID) (Preferen
 	return preference, true, nil
 }
 
-func (s *Service) Sync(ctx context.Context, scope SearchScope) (SyncResult, error) {
+func (s *Service) Sync(ctx context.Context, scope SearchScope, options ...SearchOptions) (SyncResult, error) {
 	if s == nil || s.repo == nil || s.source == nil {
 		return SyncResult{}, fmt.Errorf("job radar sync is unavailable")
 	}
 	if scope.Fingerprint == "" {
 		scope = BuildSearchScope(scope.Criteria)
 	}
+	syncOptions := SearchOptions{}
+	if len(options) > 0 {
+		syncOptions = options[0]
+	}
 	now := time.Now().UTC()
-	sourceJobs, err := s.source.Fetch(ctx, SourceQuery{Criteria: scope.Criteria, Terms: scope.Terms, Limit: max(s.maxResults, 30)})
+	sourceJobs, err := s.source.Fetch(ctx, SourceQuery{
+		Criteria:     scope.Criteria,
+		Terms:        scope.Terms,
+		Limit:        max(s.maxResults, 30),
+		ForceRefresh: syncOptions.ForceRefresh,
+	})
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -170,7 +207,7 @@ func (s *Service) Sync(ctx context.Context, scope SearchScope) (SyncResult, erro
 		}
 		jobs = append(jobs, prepared)
 	}
-	upserted, linked, err := s.repo.UpsertManyForScope(ctx, scope, jobs, now)
+	upserted, linked, err := s.repo.ReplaceManyForScope(ctx, scope, jobs, now)
 	if err != nil {
 		return SyncResult{}, err
 	}

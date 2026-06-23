@@ -31,6 +31,44 @@ test("job radar API path encodes manual criteria and refresh flag for backend se
   );
 });
 
+test("job radar refresh request bypasses browser cache", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ input: String(input), init: init ?? {} });
+    return new Response(JSON.stringify({
+      jobs: [],
+      policy: { hotWithinDays: 7, normalWithinDays: 30, staleWithinDays: 45, deleteAfterDays: 60 },
+      meta: {
+        sourceName: "Remotive",
+        searchFingerprint: "remotive:test",
+        searchQuery: "Backend",
+        cachedCount: 0,
+        expiredCount: 0,
+        expiredDeleted: 0,
+        cacheHit: false,
+        forceRefresh: true,
+        fetchedCount: 0,
+        upsertedCount: 0,
+        linkedCount: 0,
+      },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await apiClient.listJobRadarJobs({ keywords: ["Backend"] }, undefined, { refresh: true });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/jobs?keywords=Backend&refresh=1");
+    assert.equal(calls[0].init.cache, "no-store");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("job radar preference API uses authenticated account endpoint", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ input: string; init: RequestInit }> = [];
