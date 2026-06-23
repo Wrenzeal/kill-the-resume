@@ -187,7 +187,7 @@ GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
 
 数据源合规约束：当前只接入 Remotive 公开 API，不抓取招聘网站页面；前端必须展示 `sourceName` 并把岗位标题/原站按钮链接到 `sourceUrl`，为 Remotive 导流。Remotive 官方文档说明公开 API 用于开发者分享岗位，要求标注来源和回链，且不应高频请求；默认每个搜索指纹最多 6 小时同步一次，避免超过其建议频率。
 
-登录用户还可以把招聘网站或公司官网中的真实岗位手动/插件导入当前搜索范围。该导入接口接受两种凭证：主站登录 JWT，或账号面板生成的 `ktrp_` 机会雷达插件专用 Token；插件专用 Token 只允许调用此导入接口。
+登录用户还可以把招聘网站或公司官网中的真实岗位手动/插件导入当前搜索范围。该导入接口接受两种凭证：主站登录 JWT，或`/job-radar` 页面生成的 `ktrp_` 机会雷达插件专用 Token；插件专用 Token 只允许调用此导入接口。
 
 ```http
 POST /api/v1/job-radar/import
@@ -215,7 +215,7 @@ Content-Type: application/json
 
 导入接口会生成稳定 `sourceJobId`，写入 `job_postings`，并关联到 `criteria` 对应的 `job_search_results`；响应返回该岗位在当前条件下的 `matchPercent`、标签与 `searchFingerprint`。导入写入会把该搜索范围标记为已同步，避免刚导入后下一次非强制查询立即触发远端同步并替换掉手动导入岗位；用户仍可点击 `refresh=1` 主动刷新线上源。
 
-插件 Token 管理接口需要正常登录 JWT，用于在主站账号面板生成、查看和撤销插件 Token。`token` 明文只在创建响应中返回一次，列表接口只返回元数据：
+插件 Token 管理接口需要正常登录 JWT，用于在 `/job-radar` 机会雷达页面生成、查看和撤销插件 Token。`token` 明文只在创建响应中返回一次，列表接口只返回元数据：
 
 ```http
 GET /api/v1/job-radar/plugin-tokens

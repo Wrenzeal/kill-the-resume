@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
 import { useI18n } from "@/hooks/useI18n";
-import { apiClient, type JobRadarResponse } from "@/lib/api";
+import { ApiError, apiClient, type JobRadarPluginTokenMeta, type JobRadarResponse } from "@/lib/api";
 import { cn } from "@/lib/css";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import {
@@ -98,6 +98,16 @@ const tagTone: Record<JobMatchTag["kind"], string> = {
   gap: "border-[rgba(255,138,61,0.34)] bg-[rgba(255,138,61,0.08)] text-[var(--warning-orange)]",
 };
 
+function optionalTime(value: string | undefined, fallback: string, language: string) {
+  return value ? formatDateTime(value, language) : fallback;
+}
+
+function pluginTokenState(token: JobRadarPluginTokenMeta, now = Date.now()) {
+  if (token.revokedAt) return "revoked";
+  if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return "expired";
+  return "active";
+}
+
 type PreferenceStatus = "anonymous" | "loading" | "ready" | "restored" | "saved" | "error";
 
 type PreferenceLoadState = {
@@ -117,13 +127,14 @@ const preferenceStatusKeys: Record<PreferenceStatus, TranslationKey> = {
 export function JobRadarConsole() {
   const { language } = useI18n();
   const token = useCloudStore((state) => state.token);
-  const userId = useCloudStore((state) => state.user?.id ?? null);
-  const sessionKey = token ? `auth:${userId ?? "session"}` : "guest";
+  const user = useCloudStore((state) => state.user);
+  const clearAuth = useCloudStore((state) => state.clearAuth);
+  const sessionKey = token ? `auth:${user?.id ?? "session"}` : "guest";
 
-  return <JobRadarConsoleContent key={`${language}:${sessionKey}`} language={language} token={token} />;
+  return <JobRadarConsoleContent clearAuth={clearAuth} key={`${language}:${sessionKey}`} language={language} token={token} userEmail={user?.email ?? null} />;
 }
 
-function JobRadarConsoleContent({ language, token }: { language: Language; token: string | null }) {
+function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { clearAuth: () => void; language: Language; token: string | null; userEmail: string | null }) {
   const { t } = useI18n();
   const defaultCriteria = useMemo(() => createDefaultJobRadarCriteria(language), [language]);
   const [form, setForm] = useState<RadarForm>(() => toRadarForm(defaultCriteria));
@@ -134,6 +145,13 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
   const [isImporting, setIsImporting] = useState(false);
   const [importForm, setImportForm] = useState<ImportForm>(emptyImportForm);
   const [importStatus, setImportStatus] = useState("");
+  const [pluginTokens, setPluginTokens] = useState<JobRadarPluginTokenMeta[]>([]);
+  const [pluginTokenName, setPluginTokenName] = useState("Job Radar Collector");
+  const [pluginTokenExpiresInDays, setPluginTokenExpiresInDays] = useState("90");
+  const [issuedPluginToken, setIssuedPluginToken] = useState("");
+  const [pluginTokenCopied, setPluginTokenCopied] = useState(false);
+  const [pluginTokenStatus, setPluginTokenStatus] = useState("");
+  const [isPluginTokenBusy, setIsPluginTokenBusy] = useState(false);
   const [preferenceLoad, setPreferenceLoad] = useState<PreferenceLoadState>(() => ({
     token: token ?? null,
     status: token ? "loading" : "anonymous",
@@ -188,6 +206,32 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
 
     return () => controller.abort();
   }, [defaultCriteria, token]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!token) {
+      return () => controller.abort();
+    }
+
+    apiClient.listJobRadarPluginTokens(token, controller.signal)
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setPluginTokens(payload.tokens);
+        setPluginTokenStatus(t("radar.pluginTokenReady"));
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        if (error instanceof ApiError && error.status === 401) {
+          clearAuth();
+          setPluginTokenStatus(t("radar.pluginTokenSessionExpired"));
+          return;
+        }
+        setPluginTokenStatus(error instanceof Error ? error.message : t("radar.pluginTokenLoadError"));
+      });
+
+    return () => controller.abort();
+  }, [clearAuth, t, token]);
 
   useEffect(() => {
     if (!preferenceReady) {
@@ -260,6 +304,7 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
   const sourceLastSyncAt = feed?.meta.syncedAt ?? feed?.meta.lastSyncedAt;
   const sourceLastSync = sourceLastSyncAt ? fillTemplate(t("radar.lastSync"), { time: formatDateTime(sourceLastSyncAt, language) }) : "";
   const preferenceStatusText = t(preferenceStatusKeys[preferenceStatus]);
+  const visiblePluginTokenStatus = token ? pluginTokenStatus || t("radar.pluginTokenLoading") : t("radar.pluginTokenLoginRequired");
 
   const updateField = (field: keyof RadarForm) => (event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const value = field === "minScore" ? Number(event.target.value) : event.target.value;
@@ -344,6 +389,96 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
     }
   };
 
+  const refreshPluginTokens = async () => {
+    if (!token) {
+      setPluginTokenStatus(t("radar.pluginTokenLoginRequired"));
+      return;
+    }
+
+    setIsPluginTokenBusy(true);
+    setPluginTokenStatus(t("radar.pluginTokenLoading"));
+    try {
+      const payload = await apiClient.listJobRadarPluginTokens(token);
+      setPluginTokens(payload.tokens);
+      setPluginTokenStatus(t("radar.pluginTokenReady"));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearAuth();
+        setPluginTokenStatus(t("radar.pluginTokenSessionExpired"));
+        return;
+      }
+      setPluginTokenStatus(error instanceof Error ? error.message : t("radar.pluginTokenLoadError"));
+    } finally {
+      setIsPluginTokenBusy(false);
+    }
+  };
+
+  const copyIssuedPluginToken = async (value = issuedPluginToken) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setPluginTokenCopied(true);
+      setPluginTokenStatus(t("radar.pluginTokenCopied"));
+      window.setTimeout(() => setPluginTokenCopied(false), 1800);
+    } catch {
+      setPluginTokenCopied(false);
+      setPluginTokenStatus(t("radar.pluginTokenManualCopy"));
+    }
+  };
+
+  const createPluginToken = async () => {
+    if (!token) {
+      setPluginTokenStatus(t("radar.pluginTokenLoginRequired"));
+      return;
+    }
+
+    const parsedDays = Number.parseInt(pluginTokenExpiresInDays, 10);
+    const expiresInDays = Number.isFinite(parsedDays) ? Math.min(365, Math.max(1, parsedDays)) : 90;
+    setIsPluginTokenBusy(true);
+    setPluginTokenStatus(t("radar.pluginTokenCreating"));
+
+    try {
+      const payload = await apiClient.createJobRadarPluginToken(token, {
+        name: pluginTokenName,
+        expiresInDays,
+      });
+      setIssuedPluginToken(payload.token);
+      setPluginTokens((current) => [payload.meta, ...current]);
+      setPluginTokenStatus(t("radar.pluginTokenCreated"));
+      void copyIssuedPluginToken(payload.token);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearAuth();
+        setPluginTokenStatus(t("radar.pluginTokenSessionExpired"));
+        return;
+      }
+      setPluginTokenStatus(error instanceof Error ? error.message : t("radar.pluginTokenLoadError"));
+    } finally {
+      setIsPluginTokenBusy(false);
+    }
+  };
+
+  const revokePluginToken = async (tokenId: string) => {
+    if (!token) return;
+    setIsPluginTokenBusy(true);
+    setPluginTokenStatus(t("radar.pluginTokenRevoking"));
+    try {
+      await apiClient.revokeJobRadarPluginToken(token, tokenId);
+      const payload = await apiClient.listJobRadarPluginTokens(token);
+      setPluginTokens(payload.tokens);
+      setPluginTokenStatus(t("radar.pluginTokenRevokeSuccess"));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearAuth();
+        setPluginTokenStatus(t("radar.pluginTokenSessionExpired"));
+        return;
+      }
+      setPluginTokenStatus(error instanceof Error ? error.message : t("radar.pluginTokenLoadError"));
+    } finally {
+      setIsPluginTokenBusy(false);
+    }
+  };
+
   return (
     <main className="tactical-grid min-h-screen text-slate-100">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-5 py-5 lg:px-6">
@@ -371,6 +506,76 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
             </div>
           </div>
         </header>
+
+        <section className="tactical-panel border-[rgba(88,230,255,0.22)] bg-[rgba(2,6,23,0.38)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--trace-cyan)]">browser_extension_token</p>
+              <h2 className="mt-1 font-mono text-xl font-black uppercase tracking-[-0.04em] text-white">{t("radar.pluginTokenTitle")}</h2>
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">{t("radar.pluginTokenDescription")}</p>
+              {userEmail ? <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">{fillTemplate(t("radar.pluginTokenSignedIn"), { email: userEmail })}</p> : null}
+            </div>
+            <button type="button" onClick={refreshPluginTokens} disabled={isPluginTokenBusy || !token} className="border border-[rgba(88,230,255,0.35)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50">
+              {t("radar.pluginTokenRefresh")}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 xl:grid-cols-[1.4fr_0.65fr_auto]">
+            <label className="tactical-field block px-3 py-2">
+              <span className="relative z-10 block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">{t("radar.pluginTokenName")}</span>
+              <input className="tactical-input mt-1 text-[15px]" value={pluginTokenName} onChange={(event) => setPluginTokenName(event.target.value)} placeholder={t("radar.pluginTokenNamePlaceholder")} disabled={!token} />
+            </label>
+            <label className="tactical-field block px-3 py-2">
+              <span className="relative z-10 block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">{t("radar.pluginTokenExpiresDays")}</span>
+              <input className="tactical-input mt-1 text-[15px]" inputMode="numeric" value={pluginTokenExpiresInDays} onChange={(event) => setPluginTokenExpiresInDays(event.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="90" disabled={!token} />
+            </label>
+            <button type="button" onClick={createPluginToken} disabled={isPluginTokenBusy || !token} className="border border-[rgba(57,255,136,0.55)] bg-[rgba(57,255,136,0.08)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.14)] disabled:cursor-not-allowed disabled:opacity-50">
+              {t("radar.pluginTokenCreate")}
+            </button>
+          </div>
+
+          {issuedPluginToken ? (
+            <div className="mt-4 border border-[rgba(57,255,136,0.28)] bg-[rgba(57,255,136,0.06)] p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--cyber-green)]">{t("radar.pluginTokenOneTime")}</p>
+              <div className="mt-2 flex flex-col gap-2 md:flex-row">
+                <input className="tactical-input min-w-0 flex-1 font-mono text-[12px]" value={issuedPluginToken} readOnly onFocus={(event) => event.currentTarget.select()} />
+                <button type="button" onClick={() => copyIssuedPluginToken()} className="border border-[rgba(57,255,136,0.45)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.1)]">
+                  {pluginTokenCopied ? t("radar.pluginTokenCopiedShort") : t("radar.pluginTokenCopy")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            {pluginTokens.length === 0 ? (
+              <div className="border border-dashed border-[rgba(125,139,153,0.24)] px-4 py-5 text-sm text-slate-500">{token ? t("radar.pluginTokenEmpty") : t("radar.pluginTokenLoginRequired")}</div>
+            ) : (
+              pluginTokens.map((pluginToken) => {
+                const state = pluginTokenState(pluginToken);
+                return (
+                  <article key={pluginToken.id} className="border border-[rgba(125,139,153,0.18)] bg-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-[13px] uppercase tracking-[0.1em] text-slate-100">{pluginToken.name}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">{t("radar.pluginTokenExpires")}: {optionalTime(pluginToken.expiresAt, t("radar.pluginTokenNever"), language)}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">{t("radar.pluginTokenLastUsed")}: {optionalTime(pluginToken.lastUsedAt, t("radar.pluginTokenNever"), language)}</p>
+                      </div>
+                      <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em]", state === "active" && "border-[rgba(57,255,136,0.35)] text-[var(--cyber-green)]", state === "expired" && "border-[rgba(255,138,61,0.35)] text-[var(--warning-orange)]", state === "revoked" && "border-red-400/30 text-red-300")}>
+                        {t(state === "active" ? "radar.pluginTokenActive" : state === "expired" ? "radar.pluginTokenExpired" : "radar.pluginTokenRevoked")}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => revokePluginToken(pluginToken.id)} disabled={isPluginTokenBusy || state === "revoked"} className="border border-red-400/30 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50">
+                        {t("radar.pluginTokenRevoke")}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          {visiblePluginTokenStatus ? <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{visiblePluginTokenStatus}</p> : null}
+        </section>
 
         <section className="grid gap-4 xl:grid-cols-[340px_minmax(460px,1fr)_390px]">
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">

@@ -492,5 +492,9 @@
 
 - 机会雷达插件鉴权改为专用 Token：后端新增 `job_radar_plugin_tokens` 表、AutoMigrate/migration、`GET/POST/DELETE /api/v1/job-radar/plugin-tokens` 管理接口；Token 明文只在创建时返回一次，数据库只保存 SHA-256 hash，支持过期、撤销和最近使用时间。
 - `POST /api/v1/job-radar/import` 现在同时支持主站登录 JWT 与 `ktrp_` 插件专用 Token；专用 Token 只被导入接口接受，不能访问 `/me`、`/resumes`、偏好等账号接口。
-- `/editor` 账号与云端简历面板新增“机会雷达插件 Token”管理区，可生成并复制、刷新列表、撤销 Token；浏览器插件弹窗和 README 改为要求 `ktrp_` Plugin Token，不再让用户寻找/复制登录 JWT。
+- `/job-radar` 机会雷达页面新增“插件 Token 管理”区，可生成并复制、刷新列表、撤销 Token；浏览器插件弹窗和 README 改为要求 `ktrp_` Plugin Token，不再让用户寻找/复制登录 JWT。
 - 本轮验证通过：`npm run backend:test`、`npm run backend:build`、`npm run web:test`、`npm run web:typecheck`、`npm run web:lint`、`npm run web:build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`git diff --check`。
+
+- 修正机会雷达插件 Token 入口归属：从 `/editor` 账户与云端简历面板移除插件 Token 管理，改为在 `/job-radar` 机会雷达页面顶部生成、复制、刷新和撤销 `ktrp_` 插件专用 Token；简历页重新只负责账号/云端简历同步。
+- 同步更新插件 README、后端 README 与项目记忆，明确浏览器插件 Token 应从机会雷达页面获取，而不是简历编辑页面。
+- 本轮验证通过：`npm run web:lint`、`npm run web:typecheck`、`npm run web:test`、`npm run web:build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

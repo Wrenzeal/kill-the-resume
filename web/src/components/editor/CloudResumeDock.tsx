@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, apiClient, type JobRadarPluginTokenMeta } from "@/lib/api";
+import { ApiError, apiClient } from "@/lib/api";
 import { initialResumeDraft } from "@/lib/resume-defaults";
 import { normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
 import {
@@ -16,16 +16,6 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--";
   return date.toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-function optionalTime(value: string | undefined, fallback: string) {
-  return value ? formatTime(value) : fallback;
-}
-
-function pluginTokenState(token: JobRadarPluginTokenMeta, now = Date.now()) {
-  if (token.revokedAt) return "revoked";
-  if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return "expired";
-  return "active";
 }
 
 function draftTitle(name: string, targetRole: string) {
@@ -86,26 +76,14 @@ export function CloudResumeDock() {
   const [password, setPassword] = useState("password8246");
   const [displayName, setDisplayName] = useState("Dev Operator");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [pluginTokens, setPluginTokens] = useState<JobRadarPluginTokenMeta[]>([]);
-  const [pluginTokenName, setPluginTokenName] = useState("Job Radar Collector");
-  const [pluginTokenExpiresInDays, setPluginTokenExpiresInDays] = useState("90");
-  const [issuedPluginToken, setIssuedPluginToken] = useState("");
-  const [pluginTokenCopied, setPluginTokenCopied] = useState(false);
   const autoRefreshedTokenRef = useRef<string | null>(null);
   const restoredSessionRef = useRef<string | null>(null);
 
   const hasCurrentResume = Boolean(currentResumeId);
 
-  const resetPluginTokenPanel = useCallback(() => {
-    setPluginTokens([]);
-    setIssuedPluginToken("");
-    setPluginTokenCopied(false);
-  }, []);
-
   const handleClearAuth = useCallback(() => {
-    resetPluginTokenPanel();
     clearAuth();
-  }, [clearAuth, resetPluginTokenPanel]);
+  }, [clearAuth]);
 
   const handleAuthorizedRequestError = useCallback(
     (error: unknown) => {
@@ -139,17 +117,6 @@ export function CloudResumeDock() {
     }
   }, [handleAuthorizedRequestError, setCurrentResumeId, setResumes, setStatus, t, token]);
 
-  const refreshPluginTokens = useCallback(async () => {
-    if (!token) return;
-    try {
-      const payload = await apiClient.listJobRadarPluginTokens(token);
-      setPluginTokens(payload.tokens);
-    } catch (error) {
-      if (handleAuthorizedRequestError(error)) return;
-      setStatus("error", error instanceof Error ? error.message : t("cloud.pluginTokenLoadError"));
-    }
-  }, [handleAuthorizedRequestError, setStatus, t, token]);
-
   useEffect(() => {
     if (!token) return;
 
@@ -171,8 +138,7 @@ export function CloudResumeDock() {
     if (autoRefreshedTokenRef.current === token) return;
     autoRefreshedTokenRef.current = token;
     void refreshResumes();
-    void refreshPluginTokens();
-  }, [clearAuth, currentResumeId, refreshPluginTokens, refreshResumes, replaceDraft, setCurrentResumeId, setStatus, t, token, user]);
+  }, [clearAuth, currentResumeId, refreshResumes, replaceDraft, setCurrentResumeId, setStatus, t, token, user]);
 
 
   useEffect(() => {
@@ -193,16 +159,9 @@ export function CloudResumeDock() {
           ? await apiClient.login({ email, password })
           : await apiClient.register({ email, password, displayName });
       autoRefreshedTokenRef.current = payload.token;
-      resetPluginTokenPanel();
       setAuth(payload.token, payload.user);
       const list = await apiClient.listResumes(payload.token);
       setResumes(list.resumes);
-      try {
-        const pluginTokenList = await apiClient.listJobRadarPluginTokens(payload.token);
-        setPluginTokens(pluginTokenList.tokens);
-      } catch {
-        setPluginTokens([]);
-      }
       setStatus("synced", t("cloud.statusSynced"));
     } catch (error) {
       setStatus("error", error instanceof Error ? error.message : t("cloud.statusError"));
@@ -295,57 +254,6 @@ export function CloudResumeDock() {
     }
   };
 
-  const copyIssuedPluginToken = async (value = issuedPluginToken) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setPluginTokenCopied(true);
-      setStatus("synced", t("cloud.pluginTokenCopied"));
-      window.setTimeout(() => setPluginTokenCopied(false), 1800);
-    } catch {
-      setPluginTokenCopied(false);
-      setStatus("synced", t("cloud.pluginTokenManualCopy"));
-    }
-  };
-
-  const createPluginToken = async () => {
-    if (!token) {
-      setStatus("error", t("cloud.needLogin"));
-      return;
-    }
-
-    const parsedDays = Number.parseInt(pluginTokenExpiresInDays, 10);
-    const expiresInDays = Number.isFinite(parsedDays) ? Math.min(365, Math.max(1, parsedDays)) : 90;
-    setStatus("busy", t("cloud.pluginTokenCreating"));
-
-    try {
-      const payload = await apiClient.createJobRadarPluginToken(token, {
-        name: pluginTokenName,
-        expiresInDays,
-      });
-      setIssuedPluginToken(payload.token);
-      setPluginTokens((current) => [payload.meta, ...current]);
-      setStatus("synced", t("cloud.pluginTokenCreated"));
-      void copyIssuedPluginToken(payload.token);
-    } catch (error) {
-      if (handleAuthorizedRequestError(error)) return;
-      setStatus("error", error instanceof Error ? error.message : t("cloud.statusError"));
-    }
-  };
-
-  const revokePluginToken = async (tokenId: string) => {
-    if (!token) return;
-    setStatus("busy", t("cloud.pluginTokenRevoking"));
-    try {
-      await apiClient.revokeJobRadarPluginToken(token, tokenId);
-      await refreshPluginTokens();
-      setStatus("synced", t("cloud.pluginTokenRevokeSuccess"));
-    } catch (error) {
-      if (handleAuthorizedRequestError(error)) return;
-      setStatus("error", error instanceof Error ? error.message : t("cloud.statusError"));
-    }
-  };
-
   return (
     <section className="tactical-panel p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -418,73 +326,6 @@ export function CloudResumeDock() {
               <button type="button" onClick={handleClearAuth} className="border border-[rgba(255,138,61,0.35)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--warning-orange)] transition hover:bg-[rgba(255,138,61,0.08)]">
                 {t("cloud.logout")}
               </button>
-            </div>
-          </div>
-
-          <div className="border border-[rgba(88,230,255,0.22)] bg-[rgba(2,6,23,0.38)] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--trace-cyan)]">{t("cloud.pluginTokenTitle")}</p>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{t("cloud.pluginTokenDescription")}</p>
-              </div>
-              <button type="button" onClick={refreshPluginTokens} disabled={status === "busy"} className="border border-[rgba(88,230,255,0.35)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] disabled:cursor-wait disabled:opacity-60">
-                {t("cloud.pluginTokenRefresh")}
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 xl:grid-cols-[1.4fr_0.65fr_auto]">
-              <label className="tactical-field block px-3 py-2">
-                <span className="relative z-10 block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">{t("cloud.pluginTokenName")}</span>
-                <input className="tactical-input mt-1 text-[15px]" value={pluginTokenName} onChange={(event) => setPluginTokenName(event.target.value)} placeholder={t("cloud.pluginTokenNamePlaceholder")} />
-              </label>
-              <label className="tactical-field block px-3 py-2">
-                <span className="relative z-10 block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">{t("cloud.pluginTokenExpiresDays")}</span>
-                <input className="tactical-input mt-1 text-[15px]" inputMode="numeric" value={pluginTokenExpiresInDays} onChange={(event) => setPluginTokenExpiresInDays(event.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="90" />
-              </label>
-              <button type="button" onClick={createPluginToken} disabled={status === "busy"} className="border border-[rgba(57,255,136,0.55)] bg-[rgba(57,255,136,0.08)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.14)] disabled:cursor-wait disabled:opacity-60">
-                {t("cloud.pluginTokenCreate")}
-              </button>
-            </div>
-
-            {issuedPluginToken ? (
-              <div className="mt-4 border border-[rgba(57,255,136,0.28)] bg-[rgba(57,255,136,0.06)] p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--cyber-green)]">{t("cloud.pluginTokenOneTime")}</p>
-                <div className="mt-2 flex flex-col gap-2 md:flex-row">
-                  <input className="tactical-input min-w-0 flex-1 font-mono text-[12px]" value={issuedPluginToken} readOnly onFocus={(event) => event.currentTarget.select()} />
-                  <button type="button" onClick={() => copyIssuedPluginToken()} className="border border-[rgba(57,255,136,0.45)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.1)]">
-                    {pluginTokenCopied ? t("cloud.pluginTokenCopiedShort") : t("cloud.pluginTokenCopy")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-4 grid gap-3 xl:grid-cols-2">
-              {pluginTokens.length === 0 ? (
-                <div className="border border-dashed border-[rgba(125,139,153,0.24)] px-4 py-5 text-sm text-slate-500">{t("cloud.pluginTokenEmpty")}</div>
-              ) : (
-                pluginTokens.map((pluginToken) => {
-                  const state = pluginTokenState(pluginToken);
-                  return (
-                    <article key={pluginToken.id} className="border border-[rgba(125,139,153,0.18)] bg-black/20 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-mono text-[13px] uppercase tracking-[0.1em] text-slate-100">{pluginToken.name}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">{t("cloud.pluginTokenExpires")}: {optionalTime(pluginToken.expiresAt, t("cloud.pluginTokenNever"))}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">{t("cloud.pluginTokenLastUsed")}: {optionalTime(pluginToken.lastUsedAt, t("cloud.pluginTokenNever"))}</p>
-                        </div>
-                        <span className={`inline-flex shrink-0 items-center whitespace-nowrap border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] ${state === "active" ? "border-[rgba(57,255,136,0.35)] text-[var(--cyber-green)]" : state === "expired" ? "border-[rgba(255,138,61,0.35)] text-[var(--warning-orange)]" : "border-red-400/30 text-red-300"}`}>
-                          {t(state === "active" ? "cloud.pluginTokenActive" : state === "expired" ? "cloud.pluginTokenExpired" : "cloud.pluginTokenRevoked")}
-                        </span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => revokePluginToken(pluginToken.id)} disabled={status === "busy" || state === "revoked"} className="border border-red-400/30 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50">
-                          {t("cloud.pluginTokenRevoke")}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
             </div>
           </div>
 
