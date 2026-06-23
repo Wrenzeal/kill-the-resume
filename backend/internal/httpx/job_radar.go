@@ -15,6 +15,22 @@ type jobRadarPreferenceRequest struct {
 	Criteria jobradar.SearchCriteria `json:"criteria"`
 }
 
+type jobRadarImportRequest struct {
+	SourceName       string                  `json:"sourceName"`
+	SourceJobID      string                  `json:"sourceJobId"`
+	SourceURL        string                  `json:"sourceUrl"`
+	Title            string                  `json:"title"`
+	CompanyName      string                  `json:"companyName"`
+	CompanyNature    string                  `json:"companyNature"`
+	Location         string                  `json:"location"`
+	Salary           string                  `json:"salary"`
+	Description      string                  `json:"description"`
+	RawText          string                  `json:"rawText"`
+	Responsibilities []string                `json:"responsibilities"`
+	Requirements     []string                `json:"requirements"`
+	Criteria         jobradar.SearchCriteria `json:"criteria"`
+}
+
 type jobRadarPreferenceMeta struct {
 	SearchFingerprint string    `json:"searchFingerprint"`
 	SearchQuery       string    `json:"searchQuery"`
@@ -48,6 +64,43 @@ func (s *Server) listJobRadarJobs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) importJobRadarPosting(c *gin.Context) {
+	if s.jobRadar == nil {
+		writeError(c, http.StatusServiceUnavailable, "job radar service unavailable")
+		return
+	}
+
+	var req jobRadarImportRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	response, err := s.jobRadar.ImportPosting(c.Request.Context(), jobradar.ImportPostingInput{
+		SourceName:       req.SourceName,
+		SourceJobID:      req.SourceJobID,
+		SourceURL:        req.SourceURL,
+		Title:            req.Title,
+		CompanyName:      req.CompanyName,
+		CompanyNature:    req.CompanyNature,
+		Location:         req.Location,
+		Salary:           req.Salary,
+		Description:      req.Description,
+		RawText:          req.RawText,
+		Responsibilities: req.Responsibilities,
+		Requirements:     req.Requirements,
+		Criteria:         req.Criteria,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "required") {
+			writeError(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "failed to import job radar posting")
+		return
+	}
+	c.JSON(http.StatusCreated, response)
 }
 
 func (s *Server) getJobRadarPreference(c *gin.Context) {

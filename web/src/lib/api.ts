@@ -181,6 +181,13 @@ export const apiClient = {
       signal,
     });
   },
+  importJobRadarPosting(token: string, input: JobRadarImportInput, signal?: AbortSignal) {
+    return request<JobRadarImportResponse>("/job-radar/import", {
+      token,
+      body: input,
+      signal,
+    });
+  },
   listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
     return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), {
       signal,
@@ -226,6 +233,33 @@ export type JobRadarPreferenceResponse = {
     searchQuery: string;
     updatedAt: string;
   } | null;
+};
+
+export type JobRadarImportInput = {
+  sourceName?: string;
+  sourceJobId?: string;
+  sourceUrl: string;
+  title?: string;
+  companyName?: string;
+  companyNature?: string;
+  location?: string;
+  salary?: string;
+  description?: string;
+  rawText?: string;
+  responsibilities?: string[];
+  requirements?: string[];
+  criteria: JobRadarSearchCriteria;
+};
+
+export type JobRadarImportResponse = {
+  job: JobMatchResult;
+  meta: {
+    sourceName: string;
+    sourceJobId: string;
+    searchFingerprint: string;
+    searchQuery: string;
+    importedAt: string;
+  };
 };
 
 export type JobRadarListOptions = {

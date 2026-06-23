@@ -96,6 +96,74 @@ test("job radar preference API uses authenticated account endpoint", async () =>
   }
 });
 
+test("job radar import API sends authenticated posting payload", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ input: String(input), init: init ?? {} });
+    return new Response(JSON.stringify({
+      job: {
+        id: "job-1",
+        sourceName: "Boss直聘",
+        sourceJobId: "import:abc",
+        sourceUrl: "https://www.zhipin.com/job_detail/abc.html",
+        title: "Backend Engineer",
+        companyName: "Example",
+        companyNature: "Product",
+        location: "Tianjin",
+        salary: "20-30K",
+        responsibilities: [],
+        requirements: [],
+        description: "",
+        postedAt: "2026-06-23T00:00:00Z",
+        firstSeenAt: "2026-06-23T00:00:00Z",
+        lastSeenAt: "2026-06-23T00:00:00Z",
+        fetchedAt: "2026-06-23T00:00:00Z",
+        expiresAt: "2026-08-07T00:00:00Z",
+        matchPercent: 88,
+        matchTags: [],
+        warningTags: [],
+        freshnessStatus: "hot",
+        freshnessLabel: "hot",
+        freshnessRank: 4,
+        sortScore: 96,
+      },
+      meta: {
+        sourceName: "Boss直聘",
+        sourceJobId: "import:abc",
+        searchFingerprint: "remotive:test",
+        searchQuery: "Backend Tianjin Go",
+        importedAt: "2026-06-23T00:00:00Z",
+      },
+    }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const criteria = createDefaultJobRadarCriteria("en-US");
+    const payload = {
+      sourceName: "Boss直聘",
+      sourceUrl: "https://www.zhipin.com/job_detail/abc.html",
+      title: "Backend Engineer",
+      companyName: "Example",
+      location: "Tianjin",
+      rawText: "Backend Engineer with Go and Java.",
+      criteria,
+    };
+    await apiClient.importJobRadarPosting("token-1", payload);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/import");
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal((calls[0].init.headers as Headers).get("Authorization"), "Bearer token-1");
+    assert.deepEqual(JSON.parse(String(calls[0].init.body)), payload);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("API base URL resolves for local, remote HTTP, and direct HTTPS production API", () => {
   assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "https://api.killer.wrenzeal.top/api/v1");
   assert.equal(

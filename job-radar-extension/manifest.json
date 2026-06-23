@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Kill The Resume Job Radar Collector",
+  "version": "0.1.0",
+  "description": "Collect real job postings from the current tab and import them into Kill The Resume Opportunity Radar.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://api.killer.wrenzeal.top/*",
+    "http://127.0.0.1:19304/*",
+    "http://localhost:19304/*"
+  ],
+  "action": {
+    "default_title": "Send to Job Radar",
+    "default_popup": "popup.html"
+  }
+}

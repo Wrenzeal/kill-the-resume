@@ -84,11 +84,82 @@ func TestForceRefreshReturnsErrorInsteadOfCachedFallbackWhenSourceFails(t *testi
 	}
 }
 
+func TestImportPostingLinksImportedJobToCurrentScope(t *testing.T) {
+	repo := &memoryRadarRepo{}
+	service := &Service{repo: repo, maxResults: 20}
+	criteria := SearchCriteria{
+		Keywords:        []string{"Backend"},
+		Locations:       []string{"Tianjin"},
+		RequiredSkills:  []string{"Go", "Java"},
+		ExcludeKeywords: []string{"Outsourcing"},
+		MinScore:        95,
+	}
+
+	response, err := service.ImportPosting(context.Background(), ImportPostingInput{
+		SourceName:    "Boss直聘",
+		SourceURL:     "https://www.zhipin.com/job_detail/example.html?sid=abc#ignore",
+		Title:         "后端开发工程师",
+		CompanyName:   "天津示例科技",
+		CompanyNature: "产品团队",
+		Location:      "天津",
+		Salary:        "20-30K",
+		RawText:       "负责后端系统建设，要求 Golang、Java、PostgreSQL，非外包。",
+		Criteria:      criteria,
+	})
+	if err != nil {
+		t.Fatalf("import posting should succeed: %v", err)
+	}
+
+	if repo.importCalls != 1 {
+		t.Fatalf("expected one import call, got %d", repo.importCalls)
+	}
+	if len(repo.visible) != 1 {
+		t.Fatalf("expected imported job to be visible in repo, got %d", len(repo.visible))
+	}
+	if response.Meta.SearchFingerprint != BuildSearchScope(criteria).Fingerprint {
+		t.Fatalf("unexpected search fingerprint: %#v", response.Meta)
+	}
+	if response.Job.SourceName != "Boss直聘" || response.Job.Title != "后端开发工程师" {
+		t.Fatalf("unexpected imported job result: %#v", response.Job)
+	}
+	if response.Job.MatchPercent == 0 {
+		t.Fatalf("expected imported job to be scored, got %#v", response.Job)
+	}
+	if response.Job.SourceJobID == "" || !strings.HasPrefix(response.Job.SourceJobID, "import:") {
+		t.Fatalf("expected stable generated source job id, got %q", response.Job.SourceJobID)
+	}
+}
+
+func TestImportPostingReturnsScoreEvenBelowMinimumThreshold(t *testing.T) {
+	repo := &memoryRadarRepo{}
+	service := &Service{repo: repo, maxResults: 20}
+
+	response, err := service.ImportPosting(context.Background(), ImportPostingInput{
+		SourceURL: "https://jobs.example.com/weak-match",
+		Title:     "Office Administrator",
+		RawText:   "General office support and scheduling.",
+		Criteria: SearchCriteria{
+			Locations: []string{"Tianjin"},
+			MinScore:  100,
+		},
+	})
+	if err != nil {
+		t.Fatalf("import should not be rejected by minScore: %v", err)
+	}
+	if response.Job.SourceName != SourceUserImport {
+		t.Fatalf("expected default import source, got %q", response.Job.SourceName)
+	}
+	if response.Job.MatchPercent >= 100 {
+		t.Fatalf("test setup should produce a below-threshold score, got %#v", response.Job)
+	}
+}
+
 type memoryRadarRepo struct {
 	cache          models.JobSearchCache
 	visible        []models.JobPosting
 	lastNeedsForce bool
 	replaceCalls   int
+	importCalls    int
 }
 
 func (r *memoryRadarRepo) EnsureSearchCache(_ context.Context, scope SearchScope) (models.JobSearchCache, error) {
@@ -113,6 +184,20 @@ func (r *memoryRadarRepo) ReplaceManyForScope(_ context.Context, _ SearchScope, 
 	r.replaceCalls++
 	r.visible = append([]models.JobPosting(nil), jobs...)
 	return len(jobs), len(jobs), nil
+}
+
+func (r *memoryRadarRepo) ImportPostingForScope(_ context.Context, scope SearchScope, job models.JobPosting, seenAt time.Time) (models.JobPosting, error) {
+	r.importCalls++
+	stored := PreparePostingForStorage(job, seenAt)
+	if stored.ID == uuid.Nil {
+		stored.ID = uuid.New()
+	}
+	r.cache.SearchFingerprint = scope.Fingerprint
+	r.cache.SearchQuery = scope.Query
+	r.cache.Criteria = CriteriaJSON(scope.Criteria)
+	r.cache.LastSyncedAt = &seenAt
+	r.visible = append([]models.JobPosting{stored}, r.visible...)
+	return stored, nil
 }
 
 func (r *memoryRadarRepo) ListVisibleForScope(_ context.Context, _ SearchScope, _ time.Time, limit int) ([]models.JobPosting, error) {

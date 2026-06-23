@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job Radar Collector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020617;
+      --panel: #0f172a;
+      --line: #1e293b;
+      --green: #39ff88;
+      --cyan: #58e6ff;
+      --orange: #ff8a3d;
+      --muted: #94a3b8;
+      --text: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 430px;
+      max-height: 600px;
+      margin: 0;
+      overflow-y: auto;
+      background: radial-gradient(circle at top left, rgba(57,255,136,0.12), transparent 34%), var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    main { padding: 14px; }
+    header {
+      border: 1px solid rgba(57,255,136,0.34);
+      background: rgba(15,23,42,0.86);
+      padding: 12px;
+    }
+    h1 { margin: 6px 0 0; font-size: 18px; letter-spacing: -0.04em; text-transform: uppercase; }
+    .eyebrow { color: var(--green); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
+    p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    form { margin-top: 12px; display: grid; gap: 10px; }
+    label { display: grid; gap: 5px; color: #64748b; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(2,6,23,0.78);
+      color: var(--text);
+      padding: 8px;
+      outline: none;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    input:focus, textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(88,230,255,0.2); }
+    textarea { min-height: 96px; resize: vertical; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+    button {
+      cursor: pointer;
+      border: 1px solid rgba(88,230,255,0.38);
+      background: transparent;
+      color: var(--cyan);
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    button.primary { border-color: rgba(57,255,136,0.52); color: var(--green); }
+    button:hover { background: rgba(88,230,255,0.08); }
+    button.primary:hover { background: rgba(57,255,136,0.08); }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+    .status {
+      min-height: 18px;
+      margin-top: 10px;
+      color: var(--orange);
+      font-size: 12px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .hint { color: #64748b; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">kill_the_resume / job_radar_collector</div>
+      <h1>Send Job to Radar</h1>
+      <p>选中招聘页面中的岗位正文，点击插件后补充字段并写入机会雷达。</p>
+    </header>
+
+    <form id="collector-form">
+      <label>API Base URL
+        <input id="apiBaseUrl" placeholder="https://api.killer.wrenzeal.top/api/v1" />
+      </label>
+      <label>Bearer Token
+        <input id="token" type="password" placeholder="登录后的 JWT token" autocomplete="off" />
+      </label>
+      <div class="grid">
+        <label>Source
+          <input id="sourceName" placeholder="Boss直聘" />
+        </label>
+        <label>Source URL
+          <input id="sourceUrl" placeholder="https://..." required />
+        </label>
+      </div>
+      <label>Job Title
+        <input id="title" placeholder="后端开发工程师" />
+      </label>
+      <div class="grid">
+        <label>Company
+          <input id="companyName" placeholder="公司名称" />
+        </label>
+        <label>Company Type
+          <input id="companyNature" placeholder="产品团队 / 外企" />
+        </label>
+      </div>
+      <div class="grid">
+        <label>Location
+          <input id="location" placeholder="天津" />
+        </label>
+        <label>Salary
+          <input id="salary" placeholder="20-30K" />
+        </label>
+      </div>
+      <label>Job Text
+        <textarea id="rawText" placeholder="选中文本会自动填入；也可以手动粘贴岗位职责和要求。"></textarea>
+      </label>
+      <label>Job Keywords
+        <input id="keywords" placeholder="后端, Backend" />
+      </label>
+      <div class="grid">
+        <label>Radar Locations
+          <input id="criteriaLocations" placeholder="天津" />
+        </label>
+        <label>Skills
+          <input id="requiredSkills" placeholder="Golang, Java" />
+        </label>
+      </div>
+      <label>Exclude Keywords
+        <input id="excludeKeywords" placeholder="外包, 驻场, 销售" />
+      </label>
+      <div class="actions">
+        <button id="save-settings" type="button">Save</button>
+        <button class="primary" id="send" type="submit">Send</button>
+      </div>
+      <div class="status" id="status"></div>
+      <p class="hint">权限说明：插件仅在你点击按钮后读取当前标签页 URL、标题和选中文本；API Token 只保存在浏览器本地扩展存储中。</p>
+    </form>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -185,6 +185,34 @@ GET /api/v1/job-radar/jobs?keywords=Backend&requiredSkills=Go&refresh=1
 
 数据源合规约束：当前只接入 Remotive 公开 API，不抓取招聘网站页面；前端必须展示 `sourceName` 并把岗位标题/原站按钮链接到 `sourceUrl`，为 Remotive 导流。Remotive 官方文档说明公开 API 用于开发者分享岗位，要求标注来源和回链，且不应高频请求；默认每个搜索指纹最多 6 小时同步一次，避免超过其建议频率。
 
+登录用户还可以把招聘网站或公司官网中的真实岗位手动/插件导入当前搜索范围：
+
+```http
+POST /api/v1/job-radar/import
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "sourceName": "Boss直聘",
+  "sourceUrl": "https://www.zhipin.com/job_detail/example.html",
+  "title": "后端开发工程师",
+  "companyName": "天津示例科技",
+  "companyNature": "产品团队",
+  "location": "天津",
+  "salary": "20-30K",
+  "rawText": "岗位职责和要求原文...",
+  "criteria": {
+    "keywords": ["Backend"],
+    "locations": ["Tianjin"],
+    "requiredSkills": ["Golang", "Java"],
+    "excludeKeywords": ["外包", "驻场"],
+    "minScore": 50
+  }
+}
+```
+
+导入接口会生成稳定 `sourceJobId`，写入 `job_postings`，并关联到 `criteria` 对应的 `job_search_results`；响应返回该岗位在当前条件下的 `matchPercent`、标签与 `searchFingerprint`。导入写入会把该搜索范围标记为已同步，避免刚导入后下一次非强制查询立即触发远端同步并替换掉手动导入岗位；用户仍可点击 `refresh=1` 主动刷新线上源。
+
 登录用户的机会雷达搜索条件可保存到账户；前端会在查询时调用保存接口，并在下次进入页面时恢复：
 
 ```http

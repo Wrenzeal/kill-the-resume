@@ -125,6 +125,7 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	authed := api.Group("")
 	authed.Use(server.authMiddleware)
 	authed.GET("/me", server.me)
+	authed.POST("/job-radar/import", server.importJobRadarPosting)
 	authed.GET("/job-radar/preferences", server.getJobRadarPreference)
 	authed.PUT("/job-radar/preferences", server.saveJobRadarPreference)
 	authed.GET("/resumes", server.listResumes)

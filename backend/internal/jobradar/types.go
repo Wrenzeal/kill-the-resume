@@ -23,6 +23,7 @@ const (
 )
 
 const SourceRemotive = "Remotive"
+const SourceUserImport = "User Import"
 
 var FreshnessPolicy = struct {
 	HotWithinDays    int `json:"hotWithinDays"`
@@ -107,6 +108,35 @@ type SearchResponse struct {
 	Jobs   []MatchResult `json:"jobs"`
 	Policy any           `json:"policy"`
 	Meta   SearchMeta    `json:"meta"`
+}
+
+type ImportPostingInput struct {
+	SourceName       string
+	SourceJobID      string
+	SourceURL        string
+	Title            string
+	CompanyName      string
+	CompanyNature    string
+	Location         string
+	Salary           string
+	Description      string
+	RawText          string
+	Responsibilities []string
+	Requirements     []string
+	Criteria         SearchCriteria
+}
+
+type ImportMeta struct {
+	SourceName        string    `json:"sourceName"`
+	SourceJobID       string    `json:"sourceJobId"`
+	SearchFingerprint string    `json:"searchFingerprint"`
+	SearchQuery       string    `json:"searchQuery"`
+	ImportedAt        time.Time `json:"importedAt"`
+}
+
+type ImportResponse struct {
+	Job  MatchResult `json:"job"`
+	Meta ImportMeta  `json:"meta"`
 }
 
 type SyncResult struct {

@@ -2,7 +2,11 @@ package jobradar
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"kill-the-resume/backend/internal/models"
@@ -23,6 +27,7 @@ type radarRepository interface {
 	NeedsSearchSync(ctx context.Context, scope SearchScope, now time.Time, interval time.Duration, force bool) (models.JobSearchCache, bool, error)
 	MarkSearchSynced(ctx context.Context, scope SearchScope, syncedAt time.Time) error
 	ReplaceManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time) (int, int, error)
+	ImportPostingForScope(ctx context.Context, scope SearchScope, job models.JobPosting, seenAt time.Time) (models.JobPosting, error)
 	ListVisibleForScope(ctx context.Context, scope SearchScope, now time.Time, limit int) ([]models.JobPosting, error)
 	CachedCountForScope(ctx context.Context, scope SearchScope) (int64, error)
 	ExpiredCountForScope(ctx context.Context, scope SearchScope, now time.Time) (int64, error)
@@ -152,6 +157,33 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 	}, nil
 }
 
+func (s *Service) ImportPosting(ctx context.Context, input ImportPostingInput) (ImportResponse, error) {
+	if s == nil || s.repo == nil {
+		return ImportResponse{}, fmt.Errorf("job radar service is unavailable")
+	}
+
+	now := time.Now().UTC()
+	scope := BuildSearchScope(input.Criteria)
+	job, err := postingFromImportInput(input, now)
+	if err != nil {
+		return ImportResponse{}, err
+	}
+	stored, err := s.repo.ImportPostingForScope(ctx, scope, job, now)
+	if err != nil {
+		return ImportResponse{}, err
+	}
+	return ImportResponse{
+		Job: ScorePosting(stored, scope.Criteria, now),
+		Meta: ImportMeta{
+			SourceName:        stored.SourceName,
+			SourceJobID:       stored.SourceJobID,
+			SearchFingerprint: scope.Fingerprint,
+			SearchQuery:       scope.Query,
+			ImportedAt:        now,
+		},
+	}, nil
+}
+
 func (s *Service) SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (Preference, error) {
 	if s == nil || s.repo == nil {
 		return Preference{}, fmt.Errorf("job radar service is unavailable")
@@ -225,6 +257,93 @@ func (s *Service) Sync(ctx context.Context, scope SearchScope, options ...Search
 		ExpiredDeleted: deleted,
 		SyncedAt:       now,
 	}, nil
+}
+
+func postingFromImportInput(input ImportPostingInput, now time.Time) (models.JobPosting, error) {
+	sourceName := strings.TrimSpace(input.SourceName)
+	if sourceName == "" {
+		sourceName = SourceUserImport
+	}
+	sourceURL := strings.TrimSpace(input.SourceURL)
+	if sourceURL == "" {
+		return models.JobPosting{}, fmt.Errorf("job source url is required")
+	}
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		title = inferTitleFromRawText(input.RawText)
+	}
+	if title == "" {
+		return models.JobPosting{}, fmt.Errorf("job title is required")
+	}
+	description := strings.TrimSpace(input.Description)
+	rawText := strings.TrimSpace(input.RawText)
+	if rawText == "" {
+		rawText = description
+	}
+	if description == "" {
+		description = rawText
+	}
+
+	job := models.JobPosting{
+		SourceName:           sourceName,
+		SourceJobID:          stableImportJobID(sourceName, strings.TrimSpace(input.SourceJobID), sourceURL, title, input.CompanyName, input.Location),
+		SourceURL:            sourceURL,
+		Title:                title,
+		CompanyName:          strings.TrimSpace(input.CompanyName),
+		CompanyNature:        strings.TrimSpace(input.CompanyNature),
+		Location:             strings.TrimSpace(input.Location),
+		Salary:               strings.TrimSpace(input.Salary),
+		ResponsibilitiesText: strings.Join(DedupeTokens(input.Responsibilities), "\n"),
+		RequirementsText:     strings.Join(DedupeTokens(input.Requirements), "\n"),
+		Description:          truncateImportText(description, 2400),
+		RawText:              truncateImportText(rawText, 8000),
+		PostedAt:             now,
+		FirstSeenAt:          now,
+		LastSeenAt:           now,
+	}
+	if job.ResponsibilitiesText == "" && description != "" {
+		job.ResponsibilitiesText = truncateImportText(description, 600)
+	}
+	if job.RequirementsText == "" {
+		job.RequirementsText = strings.Join(DedupeTokens(append(input.Criteria.RequiredSkills, input.Criteria.Keywords...)), "\n")
+	}
+	return PreparePostingForStorage(job, now), nil
+}
+
+func stableImportJobID(sourceName, explicitID, sourceURL, title, companyName, location string) string {
+	if strings.TrimSpace(explicitID) != "" {
+		return strings.TrimSpace(explicitID)
+	}
+	canonicalURL := sourceURL
+	if parsed, err := url.Parse(sourceURL); err == nil {
+		parsed.Fragment = ""
+		canonicalURL = parsed.String()
+	}
+	payload := strings.Join([]string{sourceName, canonicalURL, title, companyName, location}, "\x00")
+	sum := sha256.Sum256([]byte(strings.ToLower(payload)))
+	return "import:" + hex.EncodeToString(sum[:])[:24]
+}
+
+func inferTitleFromRawText(rawText string) string {
+	for _, line := range strings.FieldsFunc(rawText, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return truncateImportText(line, 120)
+		}
+	}
+	return ""
+}
+
+func truncateImportText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if maxRunes <= 0 {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes])
 }
 
 func preferenceFromModel(stored models.JobRadarPreference) (Preference, error) {

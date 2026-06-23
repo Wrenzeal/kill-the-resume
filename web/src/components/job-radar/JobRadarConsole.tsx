@@ -27,6 +27,27 @@ type RadarForm = {
   minScore: number;
 };
 
+type ImportForm = {
+  sourceName: string;
+  sourceUrl: string;
+  title: string;
+  companyName: string;
+  companyNature: string;
+  location: string;
+  salary: string;
+  rawText: string;
+};
+
+const emptyImportForm: ImportForm = {
+  sourceName: "",
+  sourceUrl: "",
+  title: "",
+  companyName: "",
+  companyNature: "",
+  location: "",
+  salary: "",
+  rawText: "",
+};
 
 function toRadarForm(criteria: JobRadarSearchCriteria): RadarForm {
   return {
@@ -109,6 +130,10 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
   const [feed, setFeed] = useState<JobRadarResponse | null>(null);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
   const [feedError, setFeedError] = useState("");
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importForm, setImportForm] = useState<ImportForm>(emptyImportForm);
+  const [importStatus, setImportStatus] = useState("");
   const [preferenceLoad, setPreferenceLoad] = useState<PreferenceLoadState>(() => ({
     token: token ?? null,
     status: token ? "loading" : "anonymous",
@@ -247,6 +272,78 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
     setRefreshNonce((current) => current + 1);
   };
 
+  const openImportDialog = () => {
+    setImportStatus(token ? "" : t("radar.importLoginRequired"));
+    setIsImportOpen(true);
+  };
+
+  const closeImportDialog = () => {
+    if (!isImporting) {
+      setIsImportOpen(false);
+    }
+  };
+
+  const updateImportField = (field: keyof ImportForm) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setImportForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const submitImport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) {
+      setImportStatus(t("radar.importLoginRequired"));
+      return;
+    }
+    const sourceUrl = importForm.sourceUrl.trim();
+    if (!sourceUrl) {
+      setImportStatus(t("radar.importSourceUrlRequired"));
+      return;
+    }
+
+    setIsImporting(true);
+    setImportStatus("");
+    try {
+      const response = await apiClient.importJobRadarPosting(token, {
+        sourceName: importForm.sourceName.trim(),
+        sourceUrl,
+        title: importForm.title.trim(),
+        companyName: importForm.companyName.trim(),
+        companyNature: importForm.companyNature.trim(),
+        location: importForm.location.trim(),
+        salary: importForm.salary.trim(),
+        description: importForm.rawText.trim(),
+        rawText: importForm.rawText.trim(),
+        criteria,
+      });
+      setSelectedId(response.job.id);
+      setFeed((current) => {
+        if (!current) {
+          return current;
+        }
+        const jobs = [response.job, ...current.jobs.filter((job) => job.id !== response.job.id)];
+        return {
+          ...current,
+          jobs,
+          meta: {
+            ...current.meta,
+            cachedCount: Math.max(current.meta.cachedCount, jobs.length),
+            searchFingerprint: response.meta.searchFingerprint,
+            searchQuery: response.meta.searchQuery,
+          },
+        };
+      });
+      setImportForm(emptyImportForm);
+      setImportStatus(t("radar.importSuccess"));
+      setIsImportOpen(false);
+      setRefreshNonce((current) => current + 1);
+    } catch (error) {
+      setImportStatus(fillTemplate(t("radar.importError"), {
+        message: error instanceof Error ? error.message : "unknown error",
+      }));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <main className="tactical-grid min-h-screen text-slate-100">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-5 py-5 lg:px-6">
@@ -322,6 +419,9 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
               <button className="mt-2 w-full border border-[rgba(88,230,255,0.36)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50" disabled={isLoadingFeed} onClick={refreshSource} type="button">
                 {isLoadingFeed ? t("radar.refreshingSource") : t("radar.refreshSource")}
               </button>
+              <button className="w-full border border-[rgba(57,255,136,0.42)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.08)]" onClick={openImportDialog} type="button">
+                {t("radar.importJob")}
+              </button>
             </div>
           </aside>
 
@@ -354,6 +454,16 @@ function JobRadarConsoleContent({ language, token }: { language: Language; token
           </aside>
         </section>
       </div>
+      {isImportOpen ? (
+        <ImportDialog
+          form={importForm}
+          isImporting={isImporting}
+          status={importStatus}
+          onChange={updateImportField}
+          onClose={closeImportDialog}
+          onSubmit={submitImport}
+        />
+      ) : null}
     </main>
   );
 }
@@ -381,6 +491,73 @@ function RadarTextarea({ label, value, onChange, placeholder, rows = 3 }: {
         <textarea className="tactical-input text-[14px] leading-6" onChange={onChange} placeholder={placeholder} rows={rows} value={value} />
       </div>
     </label>
+  );
+}
+
+function RadarInput({ label, value, onChange, placeholder, required = false }: {
+  label: string;
+  value: string;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-slate-500">{label}</span>
+      <div className="mt-2 tactical-field px-3 py-2">
+        <input className="tactical-input text-[14px]" onChange={onChange} placeholder={placeholder} required={required} value={value} />
+      </div>
+    </label>
+  );
+}
+
+function ImportDialog({ form, isImporting, status, onChange, onClose, onSubmit }: {
+  form: ImportForm;
+  isImporting: boolean;
+  status: string;
+  onChange: (field: keyof ImportForm) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+      <form className="tactical-panel tactical-scrollbar max-h-[92vh] w-full max-w-3xl overflow-y-auto p-5 shadow-[0_0_48px_rgba(57,255,136,0.16)]" onSubmit={onSubmit}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <PanelTitle eyebrow="manual_job_import" title={t("radar.importTitle")} />
+          <button className="border border-slate-700 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-slate-400 transition hover:border-[var(--warning-orange)] hover:text-[var(--warning-orange)] disabled:cursor-not-allowed disabled:opacity-50" disabled={isImporting} onClick={onClose} type="button">
+            {t("radar.importCancel")}
+          </button>
+        </div>
+        <p className="mt-3 text-sm leading-7 text-slate-400">{t("radar.importDescription")}</p>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <RadarInput label={t("radar.importSourceName")} onChange={onChange("sourceName")} placeholder={t("radar.importSourceNamePlaceholder")} value={form.sourceName} />
+          <RadarInput label={t("radar.importSourceUrl")} onChange={onChange("sourceUrl") as (event: React.ChangeEvent<HTMLInputElement>) => void} placeholder={t("radar.importSourceUrlPlaceholder")} required value={form.sourceUrl} />
+          <RadarInput label={t("radar.importJobTitle")} onChange={onChange("title")} placeholder={t("radar.importJobTitlePlaceholder")} value={form.title} />
+          <RadarInput label={t("radar.importCompany")} onChange={onChange("companyName")} placeholder={t("radar.importCompanyPlaceholder")} value={form.companyName} />
+          <RadarInput label={t("radar.importCompanyNature")} onChange={onChange("companyNature")} placeholder={t("radar.importCompanyNaturePlaceholder")} value={form.companyNature} />
+          <RadarInput label={t("radar.importLocation")} onChange={onChange("location")} placeholder={t("radar.importLocationPlaceholder")} value={form.location} />
+          <RadarInput label={t("radar.importSalary")} onChange={onChange("salary")} placeholder={t("radar.importSalaryPlaceholder")} value={form.salary} />
+        </div>
+
+        <div className="mt-4">
+          <RadarTextarea label={t("radar.importRawText")} onChange={onChange("rawText") as (event: React.ChangeEvent<HTMLTextAreaElement>) => void} placeholder={t("radar.importRawTextPlaceholder")} rows={8} value={form.rawText} />
+        </div>
+
+        {status ? <p className="mt-4 border border-slate-800 bg-slate-950/55 px-3 py-2 text-sm leading-6 text-[var(--warning-orange)]">{status}</p> : null}
+
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+          <button className="border border-slate-700 px-4 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50" disabled={isImporting} onClick={onClose} type="button">
+            {t("radar.importCancel")}
+          </button>
+          <button className="border border-[rgba(57,255,136,0.52)] px-4 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.08)] disabled:cursor-not-allowed disabled:opacity-50" disabled={isImporting} type="submit">
+            {isImporting ? t("radar.importSubmitting") : t("radar.importSubmit")}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

@@ -100,6 +100,29 @@ func (r *Repository) ReplaceManyForScope(ctx context.Context, scope SearchScope,
 	return r.storeManyForScope(ctx, scope, jobs, seenAt, true)
 }
 
+func (r *Repository) ImportPostingForScope(ctx context.Context, scope SearchScope, job models.JobPosting, seenAt time.Time) (models.JobPosting, error) {
+	if scope.Fingerprint == "" {
+		return models.JobPosting{}, fmt.Errorf("job radar search fingerprint is empty")
+	}
+	if seenAt.IsZero() {
+		seenAt = time.Now().UTC()
+	}
+
+	var stored models.JobPosting
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.ensureSearchCacheInTx(tx, scope, seenAt); err != nil {
+			return err
+		}
+		var err error
+		stored, err = r.storePostingInTx(tx, scope, job, seenAt)
+		return err
+	})
+	if err != nil {
+		return models.JobPosting{}, err
+	}
+	return stored, nil
+}
+
 func (r *Repository) storeManyForScope(ctx context.Context, scope SearchScope, jobs []models.JobPosting, seenAt time.Time, replaceScope bool) (int, int, error) {
 	if scope.Fingerprint == "" {
 		return 0, 0, fmt.Errorf("job radar search fingerprint is empty")
@@ -118,58 +141,13 @@ func (r *Repository) storeManyForScope(ctx context.Context, scope SearchScope, j
 		}
 
 		for _, job := range jobs {
-			if job.SourceName == "" || job.SourceJobID == "" || job.SourceURL == "" || job.Title == "" {
+			if !isValidPostingForStorage(job) {
 				continue
 			}
-			if err := tx.Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "source_name"}, {Name: "source_job_id"}},
-				DoUpdates: clause.Assignments(map[string]any{
-					"source_url":            job.SourceURL,
-					"title":                 job.Title,
-					"company_name":          job.CompanyName,
-					"company_nature":        job.CompanyNature,
-					"location":              job.Location,
-					"salary":                job.Salary,
-					"responsibilities_text": job.ResponsibilitiesText,
-					"requirements_text":     job.RequirementsText,
-					"description":           job.Description,
-					"raw_text":              job.RawText,
-					"posted_at":             job.PostedAt,
-					"last_seen_at":          job.LastSeenAt,
-					"fetched_at":            job.FetchedAt,
-					"expires_at":            job.ExpiresAt,
-					"freshness_status":      job.FreshnessStatus,
-					"updated_at":            seenAt,
-				}),
-			}).Create(&job).Error; err != nil {
-				return fmt.Errorf("upsert %s/%s: %w", job.SourceName, job.SourceJobID, err)
+			if _, err := r.storePostingInTx(tx, scope, job, seenAt); err != nil {
+				return err
 			}
 			validCount++
-
-			var stored models.JobPosting
-			if err := tx.Where("source_name = ? AND source_job_id = ?", job.SourceName, job.SourceJobID).First(&stored).Error; err != nil {
-				return fmt.Errorf("load upserted job %s/%s: %w", job.SourceName, job.SourceJobID, err)
-			}
-
-			link := models.JobSearchResult{
-				SearchFingerprint: scope.Fingerprint,
-				JobPostingID:      stored.ID,
-				SourceName:        stored.SourceName,
-				SourceJobID:       stored.SourceJobID,
-				FirstSeenAt:       seenAt,
-				LastSeenAt:        seenAt,
-			}
-			if err := tx.Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "search_fingerprint"}, {Name: "job_posting_id"}},
-				DoUpdates: clause.Assignments(map[string]any{
-					"source_name":   stored.SourceName,
-					"source_job_id": stored.SourceJobID,
-					"last_seen_at":  seenAt,
-					"updated_at":    seenAt,
-				}),
-			}).Create(&link).Error; err != nil {
-				return fmt.Errorf("link job %s/%s to search %s: %w", stored.SourceName, stored.SourceJobID, scope.Fingerprint, err)
-			}
 			linkedCount++
 		}
 		return nil
@@ -178,6 +156,87 @@ func (r *Repository) storeManyForScope(ctx context.Context, scope SearchScope, j
 		return 0, 0, err
 	}
 	return validCount, linkedCount, nil
+}
+
+func (r *Repository) ensureSearchCacheInTx(tx *gorm.DB, scope SearchScope, seenAt time.Time) error {
+	cache := models.JobSearchCache{
+		SearchFingerprint: scope.Fingerprint,
+		SearchQuery:       scope.Query,
+		Criteria:          CriteriaJSON(scope.Criteria),
+		SourceName:        SourceRemotive,
+		LastSyncedAt:      &seenAt,
+	}
+	if err := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "search_fingerprint"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"search_query":   scope.Query,
+			"criteria":       CriteriaJSON(scope.Criteria),
+			"last_synced_at": seenAt,
+			"updated_at":     seenAt,
+		}),
+	}).Create(&cache).Error; err != nil {
+		return fmt.Errorf("ensure job search cache %s: %w", scope.Fingerprint, err)
+	}
+	return nil
+}
+
+func (r *Repository) storePostingInTx(tx *gorm.DB, scope SearchScope, job models.JobPosting, seenAt time.Time) (models.JobPosting, error) {
+	if !isValidPostingForStorage(job) {
+		return models.JobPosting{}, fmt.Errorf("job posting is missing source, url, or title")
+	}
+	if err := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "source_name"}, {Name: "source_job_id"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"source_url":            job.SourceURL,
+			"title":                 job.Title,
+			"company_name":          job.CompanyName,
+			"company_nature":        job.CompanyNature,
+			"location":              job.Location,
+			"salary":                job.Salary,
+			"responsibilities_text": job.ResponsibilitiesText,
+			"requirements_text":     job.RequirementsText,
+			"description":           job.Description,
+			"raw_text":              job.RawText,
+			"posted_at":             job.PostedAt,
+			"last_seen_at":          job.LastSeenAt,
+			"fetched_at":            job.FetchedAt,
+			"expires_at":            job.ExpiresAt,
+			"freshness_status":      job.FreshnessStatus,
+			"updated_at":            seenAt,
+		}),
+	}).Create(&job).Error; err != nil {
+		return models.JobPosting{}, fmt.Errorf("upsert %s/%s: %w", job.SourceName, job.SourceJobID, err)
+	}
+
+	var stored models.JobPosting
+	if err := tx.Where("source_name = ? AND source_job_id = ?", job.SourceName, job.SourceJobID).First(&stored).Error; err != nil {
+		return models.JobPosting{}, fmt.Errorf("load upserted job %s/%s: %w", job.SourceName, job.SourceJobID, err)
+	}
+
+	link := models.JobSearchResult{
+		SearchFingerprint: scope.Fingerprint,
+		JobPostingID:      stored.ID,
+		SourceName:        stored.SourceName,
+		SourceJobID:       stored.SourceJobID,
+		FirstSeenAt:       seenAt,
+		LastSeenAt:        seenAt,
+	}
+	if err := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "search_fingerprint"}, {Name: "job_posting_id"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"source_name":   stored.SourceName,
+			"source_job_id": stored.SourceJobID,
+			"last_seen_at":  seenAt,
+			"updated_at":    seenAt,
+		}),
+	}).Create(&link).Error; err != nil {
+		return models.JobPosting{}, fmt.Errorf("link job %s/%s to search %s: %w", stored.SourceName, stored.SourceJobID, scope.Fingerprint, err)
+	}
+	return stored, nil
+}
+
+func isValidPostingForStorage(job models.JobPosting) bool {
+	return job.SourceName != "" && job.SourceJobID != "" && job.SourceURL != "" && job.Title != ""
 }
 
 func (r *Repository) ListVisibleForScope(ctx context.Context, scope SearchScope, now time.Time, limit int) ([]models.JobPosting, error) {
