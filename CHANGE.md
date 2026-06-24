@@ -512,3 +512,7 @@
 - 清理根目录 README 的项目图标展示：删除中文 `README.md` 与英文 `README.en.md` 顶部 favicon 图片块，以及 `项目图标` / `Project Icon` 说明段落，保留更直接的项目介绍。
 - 同步更新项目记忆，记录 README 不再展示项目图标说明。
 - 本轮验证通过：`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 修复机会雷达浏览器插件薪资解析与 Send 403 问题：插件版本提升到 `0.2.1`，薪资解析会过滤明显乱码候选并从标题/正文回退提取 `20-35K×14薪`、`80-120USD/year` 等格式；后端 CORS 仅对 `/api/v1/job-radar/import` 放行 `chrome-extension://` / `moz-extension://` 预检，保持插件 Token 管理等账号接口不对扩展 Origin 开放。
+- 新增 `job-radar-extension/popup.test.mjs` 回归测试，覆盖 Boss 薪资节点乱码时从正文提取薪资，以及通用英文薪资解析；插件 README 同步记录测试命令。
+- 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`node job-radar-extension/popup.test.mjs`、`cd backend && go test ./internal/httpx -run 'TestCORSAllows'`、`npm run backend:test`、`npm run backend:build`、`git diff --check`。生产后端已通过 `npm run deploy:killer:backend` 重建并重启；线上 `https://api.killer.wrenzeal.top/healthz` 返回 200，扩展 Origin 对 `/api/v1/job-radar/import` 的预检返回 204，非导入接口仍返回 403。

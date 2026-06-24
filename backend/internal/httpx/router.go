@@ -83,13 +83,14 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	_ = router.SetTrustedProxies(nil)
 	router.Use(gin.Logger(), gin.Recovery(), securityHeadersMiddleware(cfg), requestBodyGuardMiddleware(cfg.MaxBodyBytes))
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     cfg.CORSOrigins,
-		AllowWildcard:    true,
-		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		AllowOrigins:               cfg.CORSOrigins,
+		AllowWildcard:              true,
+		AllowOriginWithContextFunc: allowJobRadarImportExtensionOrigin,
+		AllowMethods:               []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:               []string{"Authorization", "Content-Type", "Accept"},
+		ExposeHeaders:              []string{"Content-Length"},
+		AllowCredentials:           true,
+		MaxAge:                     12 * time.Hour,
 	}))
 
 	var radarService *jobradar.Service
@@ -138,6 +139,16 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	authed.DELETE("/resumes/:id", server.deleteResume)
 
 	return router
+}
+
+func allowJobRadarImportExtensionOrigin(c *gin.Context, origin string) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	if c.Request.URL.Path != "/api/v1/job-radar/import" {
+		return false
+	}
+	return strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://")
 }
 
 var allowedFontFiles = map[string]struct{}{

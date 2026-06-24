@@ -214,7 +214,7 @@ function extractCurrentJobPosting() {
   const parsed = adapter.parse({ canonical, hostname, pageTitle, selectedText, sourceName });
   const rawText = selectedText || parsed.rawText || getPageText();
   const title = cleanTitle(parsed.title || pickMeta("og:title") || pickText(["h1", "title"]) || pageTitle);
-  const salary = cleanText(parsed.salary || findSalary(`${title}\n${rawText}`));
+  const salary = findSalary(`${parsed.salary || ""}\n${title}\n${rawText}`);
   const location = cleanText(parsed.location || findLocation(rawText));
   const posting = {
     sourceName,
@@ -394,8 +394,58 @@ function extractCurrentJobPosting() {
   }
 
   function findSalary(text) {
-    const match = cleanText(text).match(/(?:\d+(?:\.\d+)?\s*[-~—到]\s*)?\d+(?:\.\d+)?\s*(?:[kK]|千|万)(?:\s*[-~—到]\s*\d+(?:\.\d+)?\s*(?:[kK]|千|万))?(?:[·xX×*]\s*\d+薪?)?|薪资面议|面议/);
-    return match?.[0] || "";
+    const normalized = cleanText(text);
+    const salaryPatterns = [
+      /(?:薪资|薪酬|工资|月薪|年薪|待遇|Salary|Compensation)[:：\s]*([\d０-９]+(?:[.,，．][\d０-９]+)?\s*(?:[-~～—–至到]|\s+to\s+)\s*[\d０-９]+(?:[.,，．][\d０-９]+)?\s*(?:[kKＫ]|千|万|w|W|元|人民币|RMB|CNY|USD|\$)(?:\s*\/?\s*(?:月|年|hour|hr|day|month|year))?(?:\s*[·xX×*]\s*[\d０-９]+\s*薪?)?)/i,
+      /([\d０-９]+(?:[.,，．][\d０-９]+)?\s*(?:[-~～—–至到]|\s+to\s+)\s*[\d０-９]+(?:[.,，．][\d０-９]+)?\s*(?:[kKＫ]|千|万|w|W|元|人民币|RMB|CNY|USD|\$)(?:\s*\/?\s*(?:月|年|hour|hr|day|month|year))?(?:\s*[·xX×*]\s*[\d０-９]+\s*薪?)?)/i,
+      /((?:薪资)?面议|薪资面议|待遇面议|Negotiable)/i,
+    ];
+    const candidates = salaryCandidateLines(normalized);
+    for (const line of candidates) {
+      if (looksLikeCorruptText(line)) continue;
+      for (const pattern of salaryPatterns) {
+        const match = line.match(pattern);
+        const value = cleanSalary(match?.[1] || match?.[0] || "");
+        if (value && !looksLikeCorruptText(value)) return value;
+      }
+    }
+    return "";
+  }
+
+  function salaryCandidateLines(text) {
+    const lines = text
+      .split(/[\n\r]+/)
+      .map((line) => cleanText(line))
+      .filter(Boolean);
+    const prioritized = lines.filter((line) => /薪|工资|月薪|年薪|待遇|面议|salary|compensation|\d/i.test(line));
+    return [...prioritized, text].slice(0, 80);
+  }
+
+  function cleanSalary(value) {
+    return cleanText(value)
+      .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+      .replace(/[，．]/g, ".")
+      .replace(/\s*(?:[-~～—–至到]|\s+to\s+)\s*/i, "-")
+      .replace(/\s*([kKＫ千万元$])\s*/g, "$1")
+      .replace(/\s+(RMB|CNY|USD)\b/gi, "$1")
+      .replace(/Ｋ/g, "K")
+      .replace(/\s*[·xX×*]\s*/g, "×")
+      .replace(/^薪资[:：\s]*/i, "")
+      .trim();
+  }
+
+  function looksLikeCorruptText(value) {
+    const text = String(value || "");
+    if (!text) return false;
+    if (/[�]/.test(text)) return true;
+    const mojibakeHits = text.match(/[ÃÂâäåæçèéêëìíîïðñòóôöøùúûüýþÿ]{2,}/gi) || [];
+    if (mojibakeHits.join("").length >= 4) return true;
+    const visible = text.replace(/\s/g, "");
+    if (visible.length >= 8) {
+      const symbolHits = visible.match(/[\uFFFD\x00-\x08\x0B\x0C\x0E-\x1F]/g) || [];
+      if (symbolHits.length / visible.length > 0.1) return true;
+    }
+    return false;
   }
 
   function findLocation(text) {

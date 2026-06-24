@@ -7,7 +7,7 @@
 - Chrome / Edge Manifest V3 插件。
 - 用户主动点击插件时读取当前页 URL、标题、canonical 链接、页面文字和选中文本。
 - 优先适配 Boss 直聘岗位详情页；内置猎聘和通用网页兜底解析。
-- 自动填充来源、岗位名、公司、企业性质、地点、薪资、岗位正文。
+- 自动填充来源、岗位名、公司、企业性质、地点、薪资、岗位正文；薪资解析会过滤明显乱码候选，并从页面正文回退提取。
 - 字段可在弹窗中手动修正，手动输入只作为自动解析失败或字段不准时的兜底。
 - 支持可选填写机会雷达匹配条件：留空时使用账号在 `/job-radar` 页面保存的当前搜索条件；填写后作为本次导入覆盖条件。
 - 使用 `/job-radar` 页面生成的 `ktrp_` 插件专用 Token 调用后端导入接口，不需要复制登录态 Token。
@@ -88,6 +88,7 @@
 ```bash
 python3 -m json.tool job-radar-extension/manifest.json >/dev/null
 node --check job-radar-extension/popup.js
+node job-radar-extension/popup.test.mjs
 ```
 
 ## 后续计划
