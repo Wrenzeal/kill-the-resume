@@ -516,3 +516,7 @@
 - 修复机会雷达浏览器插件薪资解析与 Send 403 问题：插件版本提升到 `0.2.1`，薪资解析会过滤明显乱码候选并从标题/正文回退提取 `20-35K×14薪`、`80-120USD/year` 等格式；后端 CORS 仅对 `/api/v1/job-radar/import` 放行 `chrome-extension://` / `moz-extension://` 预检，保持插件 Token 管理等账号接口不对扩展 Origin 开放。
 - 新增 `job-radar-extension/popup.test.mjs` 回归测试，覆盖 Boss 薪资节点乱码时从正文提取薪资，以及通用英文薪资解析；插件 README 同步记录测试命令。
 - 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`node job-radar-extension/popup.test.mjs`、`cd backend && go test ./internal/httpx -run 'TestCORSAllows'`、`npm run backend:test`、`npm run backend:build`、`git diff --check`。生产后端已通过 `npm run deploy:killer:backend` 重建并重启；线上 `https://api.killer.wrenzeal.top/healthz` 返回 200，扩展 Origin 对 `/api/v1/job-radar/import` 的预检返回 204，非导入接口仍返回 403。
+
+- 修复 Boss 直聘插件自动条件识别：`job-radar-extension` 版本提升到 `0.2.2`，插件现在会从 Boss 岗位标题推断 Job Keywords，从岗位地址归一化 Radar Locations，并从岗位标签/正文推断 Skills，避免导入时三个匹配条件都为空。猎聘适配器也同步保留标签供技能推断使用。
+- 扩展回归测试 `job-radar-extension/popup.test.mjs` 新增 Boss 条件识别覆盖：薪资乱码回退、`后端/Backend/Golang` 关键词、`天津` 地点、`Golang/MySQL/Redis/Docker/微服务` 技能。
+- 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`node job-radar-extension/popup.test.mjs`、`git diff --check`。

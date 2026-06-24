@@ -31,25 +31,29 @@ function runWithDocument(documentStub) {
   return vm.runInContext("extractCurrentJobPosting()", sandbox);
 }
 
-function createDocument({ url, title, h1, salary, bodyText }) {
+function createDocument({ url, title, h1, salary, bodyText, selectors = {}, selectorLists = {} }) {
   const canonical = { href: url };
+  const element = (value) => ({ innerText: value, textContent: value });
   const elements = new Map([
     ['link[rel="canonical"]', canonical],
-    ["h1", { innerText: h1, textContent: h1 }],
-    [".salary", { innerText: salary, textContent: salary }],
-    ["[class*='salary']", { innerText: salary, textContent: salary }],
-    ["body", { innerText: bodyText, textContent: bodyText }],
+    ["h1", element(h1)],
+    [".salary", element(salary)],
+    ["[class*='salary']", element(salary)],
+    ["body", element(bodyText)],
+    ...Object.entries(selectors).map(([selector, value]) => [selector, element(value)]),
   ]);
+  const lists = new Map(Object.entries(selectorLists).map(([selector, values]) => [selector, values.map(element)]));
   return {
     url,
     title,
-    body: { innerText: bodyText, textContent: bodyText },
+    body: element(bodyText),
     querySelector(selector) {
-      return elements.get(selector) || null;
+      return elements.get(selector) || lists.get(selector)?.[0] || null;
     },
     querySelectorAll(selector) {
-      const element = elements.get(selector);
-      return element ? [element] : [];
+      if (lists.has(selector)) return lists.get(selector);
+      const matched = elements.get(selector);
+      return matched ? [matched] : [];
     },
   };
 }
@@ -62,6 +66,26 @@ const boss = runWithDocument(createDocument({
   bodyText: "后端工程师\n薪资：20 - 35 K · 14薪\n岗位职责：负责 Go 服务开发。",
 }));
 assert.equal(boss.posting.salary, "20-35K×14薪");
+assert.deepEqual(Array.from(boss.posting.criteria.keywords), ["后端", "Backend"]);
+assert.deepEqual(Array.from(boss.posting.criteria.requiredSkills), ["Golang"]);
+
+
+const bossWithCriteria = runWithDocument(createDocument({
+  url: "https://www.zhipin.com/job_detail/backend.html",
+  title: "Golang后端开发工程师_Boss直聘",
+  h1: "Golang后端开发工程师",
+  salary: "25-40K·15薪",
+  bodyText: "职位要求：熟悉 Go、Redis、MySQL、Docker，有微服务经验。",
+  selectors: {
+    ".job-address": "天津·南开区·金融街",
+  },
+  selectorLists: {
+    ".job-tags span": ["Golang", "MySQL", "Redis", "Docker", "微服务"],
+  },
+}));
+assert.deepEqual(Array.from(bossWithCriteria.posting.criteria.keywords), ["后端", "Backend", "Golang"]);
+assert.deepEqual(Array.from(bossWithCriteria.posting.criteria.locations), ["天津"]);
+assert.deepEqual(Array.from(bossWithCriteria.posting.criteria.requiredSkills), ["Golang", "MySQL", "Redis", "Docker", "微服务"]);
 
 const generic = runWithDocument(createDocument({
   url: "https://example.com/jobs/1",
@@ -72,4 +96,4 @@ const generic = runWithDocument(createDocument({
 }));
 assert.equal(generic.posting.salary, "80-120USD/year");
 
-console.log("popup salary parsing regression passed");
+console.log("popup parsing regression passed");

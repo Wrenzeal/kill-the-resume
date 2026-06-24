@@ -169,6 +169,9 @@ function applyPosting(posting, { force }) {
   setFieldValue("location", posting.location, { force });
   setFieldValue("salary", posting.salary, { force });
   setFieldValue("rawText", posting.rawText, { force });
+  setFieldValue("keywords", joinTokens(posting.criteria?.keywords), { force });
+  setFieldValue("criteriaLocations", joinTokens(posting.criteria?.locations), { force });
+  setFieldValue("requiredSkills", joinTokens(posting.criteria?.requiredSkills), { force });
 }
 
 function setFieldValue(field, value, { force }) {
@@ -177,6 +180,11 @@ function setFieldValue(field, value, { force }) {
   if (force || !fields[field].value.trim()) {
     fields[field].value = normalized;
   }
+}
+
+function joinTokens(values) {
+  if (!Array.isArray(values)) return "";
+  return values.map((value) => String(value || "").trim()).filter(Boolean).join(", ");
 }
 
 async function saveSettings() {
@@ -216,6 +224,7 @@ function extractCurrentJobPosting() {
   const title = cleanTitle(parsed.title || pickMeta("og:title") || pickText(["h1", "title"]) || pageTitle);
   const salary = findSalary(`${parsed.salary || ""}\n${title}\n${rawText}`);
   const location = cleanText(parsed.location || findLocation(rawText));
+  const criteria = inferCriteria({ title, location, rawText, parsed });
   const posting = {
     sourceName,
     sourceUrl: canonical || window.location.href,
@@ -225,6 +234,7 @@ function extractCurrentJobPosting() {
     location,
     salary,
     rawText: cleanText(rawText).slice(0, MAX_TEXT_LENGTH),
+    criteria,
   };
   const fields = Object.entries(posting)
     .filter(([key, value]) => key !== "sourceUrl" && key !== "sourceName" && String(value || "").trim())
@@ -282,8 +292,15 @@ function extractCurrentJobPosting() {
       ".company-tag-list span",
       ".company-info p",
       ".level-list li",
-      ".job-tags span",
     ], 8).join(", ");
+    const tags = collectTexts([
+      ".job-tags span",
+      ".job-keyword-list span",
+      ".job-labels span",
+      ".tag-list span",
+      "[class*='tag'] span",
+      "[class*='label'] span",
+    ], 24);
     const location = pickText([
       ".job-address",
       ".job-location",
@@ -304,18 +321,19 @@ function extractCurrentJobPosting() {
       "main",
     ]);
 
-    return { title, salary, companyName, companyNature, location, rawText };
+    return { title, salary, companyName, companyNature, location, rawText, tags };
   }
 
   function parseLiepin(context) {
     const title = pickText([".job-title", ".name h1", "h1"]);
     const salary = pickText([".salary", ".job-salary", "[class*='salary']"]);
     const companyName = pickText([".company-name", ".company-info .name", "a[href*='/company/']"]);
-    const companyNature = collectTexts([".company-tag span", ".company-tags span", ".labels span", ".tag-list span"], 8).join(", ");
+    const tags = collectTexts([".job-tags span", ".labels span", ".tag-list span", "[class*='tag'] span", "[class*='label'] span"], 24);
+    const companyNature = collectTexts([".company-tag span", ".company-tags span"], 8).join(", ");
     const location = pickText([".basic-infor span", ".job-address", ".location", "[class*='location']"]);
     const rawText = context.selectedText || joinSectionTexts([".job-intro-container", ".content", ".job-detail", "main"]);
 
-    return { title, salary, companyName, companyNature, location, rawText };
+    return { title, salary, companyName, companyNature, location, rawText, tags };
   }
 
   function parseGeneric(context) {
@@ -391,6 +409,88 @@ function extractCurrentJobPosting() {
       .replace(/[-_|｜].*?(招聘|直聘|猎聘|LinkedIn|拉勾|智联|前程无忧).*$/i, "")
       .replace(/\s*\d+(?:\.\d+)?\s*[-~—到]\s*\d+(?:\.\d+)?\s*[kK千万].*$/, "")
       .slice(0, 160);
+  }
+
+  function inferCriteria({ title, location, rawText, parsed }) {
+    const skills = uniqueTokens([
+      ...extractSkillTokens(parsed.tags || []),
+      ...extractSkillTokens(rawText),
+      ...extractSkillTokens(title),
+    ]).slice(0, 10);
+    return {
+      keywords: inferJobKeywords(title),
+      locations: location ? [normalizeLocationForCriteria(location)] : [],
+      requiredSkills: skills,
+    };
+  }
+
+  function inferJobKeywords(title) {
+    const normalized = cleanTitle(title);
+    const tokens = [];
+    if (/后端|服务端|后台|Backend|Server/i.test(normalized)) tokens.push("后端", "Backend");
+    if (/前端|Frontend|Web前端|React|Vue/i.test(normalized)) tokens.push("前端", "Frontend");
+    if (/全栈|Full[- ]?Stack/i.test(normalized)) tokens.push("全栈", "Full Stack");
+    if (/Java(?!Script)/i.test(normalized)) tokens.push("Java");
+    if (/Go|Golang/i.test(normalized)) tokens.push("Golang");
+    if (/Python/i.test(normalized)) tokens.push("Python");
+    if (/AI|AIGC|机器学习|算法|大模型|LLM/i.test(normalized)) tokens.push("AI");
+    if (!tokens.length && normalized) {
+      const fallback = normalized
+        .replace(/[（(].*?[）)]/g, "")
+        .replace(/工程师|开发|专家|主管|经理|负责人|实习生|校招|社招/g, "")
+        .trim();
+      if (fallback) tokens.push(fallback);
+    }
+    return uniqueTokens(tokens).slice(0, 4);
+  }
+
+  function extractSkillTokens(input) {
+    const text = Array.isArray(input) ? input.join("\n") : String(input || "");
+    const skillPatterns = [
+      [/(?:Go|Golang)\b/gi, "Golang"],
+      [/\bJava\b/g, "Java"],
+      [/\bPython\b/gi, "Python"],
+      [/\bTypeScript\b|\bTS\b/g, "TypeScript"],
+      [/\bJavaScript\b|\bJS\b/g, "JavaScript"],
+      [/\bReact\b/gi, "React"],
+      [/\bVue\b/gi, "Vue"],
+      [/\bNode(?:\.js)?\b/gi, "Node.js"],
+      [/\bMySQL\b/gi, "MySQL"],
+      [/\bPostgreSQL\b|\bPostgres\b/gi, "PostgreSQL"],
+      [/\bRedis\b/gi, "Redis"],
+      [/\bKafka\b/gi, "Kafka"],
+      [/\bDocker\b/gi, "Docker"],
+      [/\bKubernetes\b|\bK8s\b/gi, "Kubernetes"],
+      [/\bLinux\b/gi, "Linux"],
+      [/微服务/g, "微服务"],
+      [/分布式/g, "分布式"],
+      [/云原生/g, "云原生"],
+      [/大模型|LLM/gi, "LLM"],
+    ];
+    const skills = [];
+    for (const [pattern, label] of skillPatterns) {
+      if (pattern.test(text)) skills.push(label);
+    }
+    return skills;
+  }
+
+  function normalizeLocationForCriteria(value) {
+    const text = cleanText(value);
+    const city = text.match(/北京|上海|天津|重庆|深圳|广州|杭州|成都|南京|苏州|武汉|西安|长沙|郑州|青岛|济南|合肥|厦门|福州|宁波|无锡|佛山|东莞|珠海|远程|Remote/i)?.[0];
+    return city || text.split(/[·\-/ ,，]/)[0] || text;
+  }
+
+  function uniqueTokens(values) {
+    const seen = new Set();
+    const tokens = [];
+    for (const value of values) {
+      const token = cleanText(value);
+      const key = token.toLowerCase();
+      if (!token || seen.has(key)) continue;
+      seen.add(key);
+      tokens.push(token);
+    }
+    return tokens;
   }
 
   function findSalary(text) {
