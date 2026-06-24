@@ -503,3 +503,12 @@
 - 新增 Boss 直聘优先适配器、猎聘适配器和通用网页兜底解析；弹窗新增 `Re-read Page`，手动输入变为字段修正兜底，不再要求先选中文本再手动补全大部分内容。
 - 插件 README 与项目记忆同步更新，明确插件不批量抓取、不自动翻页、不后台静默采集，只在用户主动点击时解析当前页。
 - 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 修复机会雷达插件导入后当前列表显示“没有匹配岗位”的问题：插件不再把自动解析到的岗位地点/公司类型当成本次搜索范围；当插件没有显式填写岗位关键字、地点、企业性质或技能时，后端导入接口会回退使用该账号在 `/job-radar` 保存的最新搜索条件，从而把导入岗位关联到当前雷达搜索指纹。
+- 修复插件页面注入脚本缺失 `MAX_TEXT_LENGTH` 常量的问题，避免自动解析当前页时因运行时变量不可见而失败。
+- 同步更新插件 README、后端 README 与项目记忆，说明插件匹配条件默认可留空、留空时使用雷达页当前搜索条件。
+- 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`npm run backend:test`、`npm run backend:build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`；生产后端已通过 `npm run deploy:killer:backend` 重建并重启，PM2 `kill-the-resume-backend` online，`https://api.killer.wrenzeal.top/healthz` 返回 `{"status":"ok"}`。
+
+- 清理根目录 README 的项目图标展示：删除中文 `README.md` 与英文 `README.en.md` 顶部 favicon 图片块，以及 `项目图标` / `Project Icon` 说明段落，保留更直接的项目介绍。
+- 同步更新项目记忆，记录 README 不再展示项目图标说明。
+- 本轮验证通过：`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

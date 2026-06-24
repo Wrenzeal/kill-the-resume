@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./web/public/favicon.svg" alt="Kill The Resume tactical project icon" width="96" height="96" />
-</p>
-
 <h1 align="center">Kill The Resume</h1>
 
 <p align="center">
@@ -11,10 +7,6 @@
 <p align="center">
   <a href="./README.md">中文</a> · <a href="./README.en.md">English</a>
 </p>
-
-## Project Icon
-
-The current browser-tab favicon is also the project icon for Kill The Resume. Its source lives at [`web/public/favicon.svg`](./web/public/favicon.svg). The icon combines a dark tactical terminal tile, cyber-green / trace-cyan / warning-orange targeting brackets, a torn resume document, a red kill slash, and the `KTR` mark. It represents the product idea: kill the traditional static resume and turn the resume into a personal core data console.
 
 ## Product Direction
 

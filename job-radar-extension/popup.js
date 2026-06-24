@@ -77,6 +77,15 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const criteria = {
+    keywords: splitTokens(fields.keywords.value),
+    locations: splitTokens(fields.criteriaLocations.value),
+    companyNatures: [],
+    requiredSkills: splitTokens(fields.requiredSkills.value),
+    excludeKeywords: splitTokens(fields.excludeKeywords.value),
+    minScore: 0,
+  };
+
   const payload = {
     sourceName: fields.sourceName.value.trim(),
     sourceUrl,
@@ -87,14 +96,7 @@ form.addEventListener("submit", async (event) => {
     salary: fields.salary.value.trim(),
     description: fields.rawText.value.trim(),
     rawText: fields.rawText.value.trim(),
-    criteria: {
-      keywords: splitTokens(fields.keywords.value),
-      locations: splitTokens(fields.criteriaLocations.value || fields.location.value),
-      companyNatures: splitTokens(fields.companyNature.value),
-      requiredSkills: splitTokens(fields.requiredSkills.value),
-      excludeKeywords: splitTokens(fields.excludeKeywords.value),
-      minScore: 0,
-    },
+    criteria,
   };
 
   sendButton.disabled = true;
@@ -202,7 +204,8 @@ async function readActivePage(tabId) {
 }
 
 function extractCurrentJobPosting() {
-    const selectedText = cleanText(String(window.getSelection?.().toString() || ""));
+  const MAX_TEXT_LENGTH = 12000;
+  const selectedText = cleanText(String(window.getSelection?.().toString() || ""));
   const canonical = document.querySelector('link[rel="canonical"]')?.href || window.location.href;
   const hostname = safeHostname(canonical || window.location.href);
   const sourceName = inferSourceName(canonical || window.location.href);

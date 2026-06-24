@@ -9,6 +9,7 @@ import (
 	"kill-the-resume/backend/internal/jobradar"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type jobRadarPreferenceRequest struct {
@@ -77,6 +78,11 @@ func (s *Server) importJobRadarPosting(c *gin.Context) {
 		return
 	}
 
+	criteria, ok := s.criteriaForJobRadarImport(c, req.Criteria)
+	if !ok {
+		return
+	}
+
 	response, err := s.jobRadar.ImportPosting(c.Request.Context(), jobradar.ImportPostingInput{
 		SourceName:       req.SourceName,
 		SourceJobID:      req.SourceJobID,
@@ -90,7 +96,7 @@ func (s *Server) importJobRadarPosting(c *gin.Context) {
 		RawText:          req.RawText,
 		Responsibilities: req.Responsibilities,
 		Requirements:     req.Requirements,
-		Criteria:         req.Criteria,
+		Criteria:         criteria,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "required") {
@@ -101,6 +107,33 @@ func (s *Server) importJobRadarPosting(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, response)
+}
+
+func (s *Server) criteriaForJobRadarImport(c *gin.Context, requested jobradar.SearchCriteria) (jobradar.SearchCriteria, bool) {
+	criteria := jobradar.NormalizeCriteria(requested)
+	if jobradar.HasSearchScopeTerms(criteria) {
+		return criteria, true
+	}
+
+	userID := currentUserID(c)
+	if userID == uuid.Nil {
+		return criteria, true
+	}
+
+	preference, found, err := s.jobRadar.GetPreference(c.Request.Context(), userID)
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to load job radar preference")
+		return jobradar.SearchCriteria{}, false
+	}
+	return selectJobRadarImportCriteria(criteria, preference.Criteria, found), true
+}
+
+func selectJobRadarImportCriteria(requested jobradar.SearchCriteria, savedPreference jobradar.SearchCriteria, hasPreference bool) jobradar.SearchCriteria {
+	criteria := jobradar.NormalizeCriteria(requested)
+	if jobradar.HasSearchScopeTerms(criteria) || !hasPreference {
+		return criteria
+	}
+	return jobradar.NormalizeCriteria(savedPreference)
 }
 
 func (s *Server) getJobRadarPreference(c *gin.Context) {

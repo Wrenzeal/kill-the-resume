@@ -188,6 +188,10 @@ func SearchScopeTerms(criteria SearchCriteria) []string {
 	return DedupeTokens(terms)
 }
 
+func HasSearchScopeTerms(criteria SearchCriteria) bool {
+	return len(SearchScopeTerms(NormalizeCriteria(criteria))) > 0
+}
+
 func SourceSearchTerms(criteria SearchCriteria) []string {
 	terms := []string{}
 	for _, token := range append(append([]string{}, criteria.Keywords...), criteria.RequiredSkills...) {

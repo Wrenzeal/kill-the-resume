@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./web/public/favicon.svg" alt="Kill The Resume 战术终端项目图标" width="96" height="96" />
-</p>
-
 <h1 align="center">Kill The Resume</h1>
 
 <p align="center">
@@ -11,10 +7,6 @@
 <p align="center">
   <a href="./README.md">中文</a> · <a href="./README.en.md">English</a>
 </p>
-
-## 项目图标
-
-当前浏览器标签图标就是 Kill The Resume 的项目图标，源码位于 [`web/public/favicon.svg`](./web/public/favicon.svg)。它采用暗色战术终端底板、赛博绿/追踪青/警戒橙定位框、被撕裂的简历纸张、红色 kill slash 和 `KTR` 标记，表达“终结传统静态简历，把简历变成个人核心数据控制台”的产品方向。
 
 ## 项目定位
 

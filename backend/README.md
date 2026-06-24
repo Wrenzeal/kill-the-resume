@@ -213,7 +213,7 @@ Content-Type: application/json
 }
 ```
 
-导入接口会生成稳定 `sourceJobId`，写入 `job_postings`，并关联到 `criteria` 对应的 `job_search_results`；响应返回该岗位在当前条件下的 `matchPercent`、标签与 `searchFingerprint`。导入写入会把该搜索范围标记为已同步，避免刚导入后下一次非强制查询立即触发远端同步并替换掉手动导入岗位；用户仍可点击 `refresh=1` 主动刷新线上源。
+导入接口会生成稳定 `sourceJobId`，写入 `job_postings`，并关联到 `criteria` 对应的 `job_search_results`；如果 `criteria` 没有岗位关键字、地点、企业性质或技能等搜索范围字段，后端会使用已认证用户在 `/job-radar` 保存的最新搜索条件，确保浏览器插件默认导入后能出现在当前雷达列表中。响应返回该岗位在当前条件下的 `matchPercent`、标签与 `searchFingerprint`。导入写入会把该搜索范围标记为已同步，避免刚导入后下一次非强制查询立即触发远端同步并替换掉手动导入岗位；用户仍可点击 `refresh=1` 主动刷新线上源。
 
 插件 Token 管理接口需要正常登录 JWT，用于在 `/job-radar` 机会雷达页面生成、查看和撤销插件 Token。`token` 明文只在创建响应中返回一次，列表接口只返回元数据：
 

@@ -1,13 +1,13 @@
 # kill-the-resume Project Memory
 
-Last updated: 2026-06-23 Asia/Shanghai
+Last updated: 2026-06-24 Asia/Shanghai
 
 This file is the durable project memory for new Codex conversations. Read it before making project changes, then verify any stale-sensitive facts against source files.
 
 ## Product Direction
 
 - Project name: `kill-the-resume`.
-- Root documentation now has Chinese `README.md` plus English `README.en.md`; both display `web/public/favicon.svg` as the project icon and explain the tactical terminal / torn resume / kill slash / KTR visual meaning.
+- Root documentation has Chinese `README.md` plus English `README.en.md`; both intentionally omit the project icon showcase/visual-explanation section to keep the README less AI-generated and more direct.
 - Product goal: build a disruptive online resume editor for geeks/developers, treating a resume as a personal core data console rather than a static document.
 - Primary UX language: Futuristic Tactical Console / Tactical Terminal.
 - Browser/site icon direction: tactical dark terminal favicon with cyber-green/cyan/orange targeting brackets, torn resume document, red kill slash, and KTR mark. Assets live in `web/public/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `icons/icon.svg`, `icons/icon-192.png`, `icons/icon-512.png`, with manifest `web/public/site.webmanifest` and metadata in `web/src/app/layout.tsx`.
@@ -101,7 +101,7 @@ This file is the durable project memory for new Codex conversations. Read it bef
 
 ## Implemented Opportunity Radar Capabilities
 
-- `/job-radar` is a backend-backed `机会雷达` / `牛马雷达` MVP. The page calls `GET /api/v1/job-radar/jobs` for real cached job postings scoped by the current search fingerprint; frontend job mock data and backend-unreachable fallback lists have been removed, so backend failures show an error/empty state instead of fake postings. Logged-in users also use authenticated `GET` / `PUT /api/v1/job-radar/preferences` so the latest manual search criteria persist on the account and are restored after refresh or later login; they can use the page import dialog with their login session or the browser extension with a generated `ktrp_` plugin token to call `POST /api/v1/job-radar/import` and store real postings from job sites/company pages into the current search scope.
+- `/job-radar` is a backend-backed `机会雷达` / `牛马雷达` MVP. The page calls `GET /api/v1/job-radar/jobs` for real cached job postings scoped by the current search fingerprint; frontend job mock data and backend-unreachable fallback lists have been removed, so backend failures show an error/empty state instead of fake postings. Logged-in users also use authenticated `GET` / `PUT /api/v1/job-radar/preferences` so the latest manual search criteria persist on the account and are restored after refresh or later login; they can use the page import dialog with their login session or the browser extension with a generated `ktrp_` plugin token to call `POST /api/v1/job-radar/import` and store real postings from job sites/company pages into the current search scope. Browser-extension imports with empty scope fields intentionally fall back to the authenticated user's saved `/job-radar` preference; the extension's auto-parsed job location/company type are saved as job details only and must not silently create a different search fingerprint.
 - `/job-radar` page copy is wired to the shared Chinese/English i18n system; do not add hardcoded Chinese labels for top-right actions, panel controls, placeholders, metrics, sort hints, backend status, or display data. `createDefaultJobRadarCriteria(language)` returns localized default search criteria; English-mode default criteria have regression coverage against CJK text. Job match tags are structured as `kind + label`; UI should display only the concrete label and use color plus the legend to explain whether a tag is a keyword, skill, location, company type, risk, or gap.
 - The page keeps the Tactical Terminal visual language and uses a three-column layout: manual search criteria, ranked job list, and selected job/source detail. The home page has a `启动机会雷达` / `Launch Job Radar` entry.
 - Search criteria currently support job keywords, locations, company nature, technical keywords, exclude keywords, and minimum match percentage. For authenticated sessions, the console waits for preference restore before the first feed query so existing account criteria are not overwritten by language defaults.

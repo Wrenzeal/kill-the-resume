@@ -84,6 +84,18 @@ func TestForceRefreshReturnsErrorInsteadOfCachedFallbackWhenSourceFails(t *testi
 	}
 }
 
+func TestHasSearchScopeTermsIgnoresDisplayOnlyFilters(t *testing.T) {
+	if HasSearchScopeTerms(SearchCriteria{ExcludeKeywords: []string{"外包"}, MinScore: 90}) {
+		t.Fatal("exclude keywords and min score must not create a search scope")
+	}
+	if !HasSearchScopeTerms(SearchCriteria{Keywords: []string{"后端"}}) {
+		t.Fatal("job keywords should create a search scope")
+	}
+	if !HasSearchScopeTerms(SearchCriteria{RequiredSkills: []string{"Golang"}, Locations: []string{"天津"}}) {
+		t.Fatal("skills and locations should create a search scope")
+	}
+}
+
 func TestImportPostingLinksImportedJobToCurrentScope(t *testing.T) {
 	repo := &memoryRadarRepo{}
 	service := &Service{repo: repo, maxResults: 20}
