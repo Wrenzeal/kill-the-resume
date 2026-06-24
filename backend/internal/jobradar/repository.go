@@ -135,8 +135,10 @@ func (r *Repository) storeManyForScope(ctx context.Context, scope SearchScope, j
 	linkedCount := 0
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if replaceScope {
-			if err := tx.Where("search_fingerprint = ?", scope.Fingerprint).Delete(&models.JobSearchResult{}).Error; err != nil {
-				return fmt.Errorf("replace job search results for %s: %w", scope.Fingerprint, err)
+			if err := tx.
+				Where("search_fingerprint = ? AND source_name = ?", scope.Fingerprint, SourceRemotive).
+				Delete(&models.JobSearchResult{}).Error; err != nil {
+				return fmt.Errorf("replace online job search results for %s: %w", scope.Fingerprint, err)
 			}
 		}
 

@@ -57,6 +57,46 @@ func TestForceRefreshReplacesScopeWithFreshSourceResults(t *testing.T) {
 	}
 }
 
+func TestForceRefreshPreservesImportedJobsInScope(t *testing.T) {
+	now := time.Now().UTC()
+	imported := serviceTestPosting("imported", "Imported Boss Backend Engineer", now)
+	imported.SourceName = "Boss直聘"
+	imported.SourceJobID = "import:boss"
+	oldOnline := serviceTestPosting("old-online", "Old Online Backend Engineer", now.Add(-2*day))
+	freshOnline := serviceTestPosting("fresh-online", "Fresh Online Backend Engineer", now.Add(-1*day))
+	repo := &memoryRadarRepo{visible: []models.JobPosting{imported, oldOnline}}
+	source := &recordingSource{jobs: []models.JobPosting{freshOnline}}
+	service := &Service{
+		repo:         repo,
+		source:       source,
+		syncEnabled:  true,
+		syncInterval: 6 * time.Hour,
+		maxResults:   20,
+	}
+
+	response, err := service.SearchWithOptions(context.Background(), SearchCriteria{
+		Keywords:       []string{"Backend"},
+		RequiredSkills: []string{"Golang"},
+	}, SearchOptions{ForceRefresh: true})
+	if err != nil {
+		t.Fatalf("force refresh should succeed: %v", err)
+	}
+
+	ids := make(map[string]bool)
+	for _, job := range response.Jobs {
+		ids[job.SourceJobID] = true
+	}
+	if !ids["import:boss"] {
+		t.Fatalf("force refresh should preserve imported job link, jobs=%#v", response.Jobs)
+	}
+	if !ids["fresh-online"] {
+		t.Fatalf("force refresh should include fresh online job, jobs=%#v", response.Jobs)
+	}
+	if ids["old-online"] {
+		t.Fatalf("force refresh should replace old online job link, jobs=%#v", response.Jobs)
+	}
+}
+
 func TestForceRefreshReturnsErrorInsteadOfCachedFallbackWhenSourceFails(t *testing.T) {
 	oldCached := serviceTestPosting("old-cached", "Old Cached Backend Engineer", time.Now().UTC().Add(-2*day))
 	repo := &memoryRadarRepo{visible: []models.JobPosting{oldCached}}
@@ -194,7 +234,13 @@ func (r *memoryRadarRepo) MarkSearchSynced(_ context.Context, _ SearchScope, syn
 
 func (r *memoryRadarRepo) ReplaceManyForScope(_ context.Context, _ SearchScope, jobs []models.JobPosting, _ time.Time) (int, int, error) {
 	r.replaceCalls++
-	r.visible = append([]models.JobPosting(nil), jobs...)
+	preserved := make([]models.JobPosting, 0, len(r.visible))
+	for _, job := range r.visible {
+		if job.SourceName != SourceRemotive {
+			preserved = append(preserved, job)
+		}
+	}
+	r.visible = append(preserved, jobs...)
 	return len(jobs), len(jobs), nil
 }
 

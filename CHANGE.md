@@ -520,3 +520,7 @@
 - 修复 Boss 直聘插件自动条件识别：`job-radar-extension` 版本提升到 `0.2.2`，插件现在会从 Boss 岗位标题推断 Job Keywords，从岗位地址归一化 Radar Locations，并从岗位标签/正文推断 Skills，避免导入时三个匹配条件都为空。猎聘适配器也同步保留标签供技能推断使用。
 - 扩展回归测试 `job-radar-extension/popup.test.mjs` 新增 Boss 条件识别覆盖：薪资乱码回退、`后端/Backend/Golang` 关键词、`天津` 地点、`Golang/MySQL/Redis/Docker/微服务` 技能。
 - 本轮验证通过：`python3 -m json.tool job-radar-extension/manifest.json >/dev/null`、`node --check job-radar-extension/popup.js`、`node job-radar-extension/popup.test.mjs`、`git diff --check`。
+
+- 修复机会雷达刷新岗位源后插件导入岗位不显示的问题：`refresh=1` 现在只替换当前搜索范围里的 Remotive 在线源关联，不再删除同一 `searchFingerprint` 下 Boss/插件/手动导入岗位的 `job_search_results` 关联。这样数据库中已导入的岗位会继续随当前搜索范围返回，刷新源只更新在线源 30 条。
+- 新增后端回归测试 `TestForceRefreshPreservesImportedJobsInScope`，覆盖“当前范围已有导入岗位 + 旧 Remotive 岗位，强制刷新后保留导入岗位、替换旧在线源岗位”的场景。
+- 本轮验证通过：`cd backend && go test ./internal/jobradar`、`npm run backend:test`、`npm run backend:build`、`git diff --check`；生产后端已通过 `npm run deploy:killer:backend` 重建并重启，PM2 `kill-the-resume-backend` online，`https://api.killer.wrenzeal.top/healthz` 返回 `{"status":"ok"}`。
