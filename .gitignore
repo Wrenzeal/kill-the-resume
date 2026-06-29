@@ -45,3 +45,11 @@ pnpm-debug.log*
 # go build artifacts
 /backend/server
 backend/*.exe
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**

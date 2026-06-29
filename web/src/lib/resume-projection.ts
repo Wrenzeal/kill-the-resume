@@ -2,7 +2,7 @@ import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { formatDateRange } from "@/lib/date-range";
 import { getOrderedFields } from "@/lib/resume-layout";
 import { normalizeSkillColumnMode, normalizeSkillDisplayMode, skillCategoriesFromFields } from "@/lib/skills";
-import type { DateRange, EditorModule, ResumeDraft } from "@/types/resume";
+import type { CustomModuleField, DateRange, EditorModule, ResumeDraft } from "@/types/resume";
 import type { Language } from "@/lib/i18n";
 
 export type ResumeValue = string | DateRange;
@@ -70,5 +70,31 @@ export function projectSkillSection(draft: ResumeDraft) {
     displayMode,
     columnMode,
     columnCount: columnMode === "one" ? 1 : 2,
+  };
+}
+
+
+export function projectCustomFieldText(field: CustomModuleField, language: Language) {
+  if (field.type === "date") return formatDateRange(field.value, language);
+  return String(field.value ?? "");
+}
+
+export function projectCustomModuleSection(draft: ResumeDraft, moduleId: string, language: Language) {
+  const customModule = draft.customModules.find((item) => item.id === moduleId);
+  if (!customModule) return null;
+
+  const fields = customModule.fields
+    .filter((field) => field.visible)
+    .map((field) => ({ field, value: projectCustomFieldText(field, language).trim() }))
+    .filter(({ value }) => value.length > 0);
+
+  const title = customModule.title.trim();
+
+  if (!title && !fields.length) return null;
+
+  return {
+    module: customModule,
+    title: title || customModule.title,
+    fields,
   };
 }

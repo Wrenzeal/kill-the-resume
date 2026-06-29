@@ -350,7 +350,7 @@ test("resume normalization keeps export last and separates editing from persiste
   assert.equal(persisted.layout.modules.at(-1)?.id, "export");
 });
 
-import { projectIdentityContact, projectSkillSection } from "@/lib/resume-projection";
+import { projectCustomModuleSection, projectIdentityContact, projectSkillSection } from "@/lib/resume-projection";
 
 test("shared projection drives identity contact rules for preview and PDF", () => {
   const draft = structuredClone(initialResumeDraft) as ResumeDraft;
@@ -389,6 +389,51 @@ test("shared projection exposes skill display mode, columns, and categories", ()
   assert.deepEqual(projected.categories.map((category) => category.id), ["tools", "frontend", "ops"]);
 });
 
+
+
+
+test("custom modules project even before fields are filled", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.customModules = [{
+    id: "custom-impact",
+    title: "Open Source Impact",
+    fields: [
+      { id: "empty-title", label: "Title", type: "text", value: "", visible: true },
+      { id: "hidden", label: "Hidden", type: "textarea", value: "Should not render", visible: false },
+    ],
+  }];
+  draft.layout.modules = [
+    { id: "identity", visible: true },
+    { id: "custom-impact", visible: true },
+    { id: "export", visible: false },
+  ];
+
+  const section = projectCustomModuleSection(draft, "custom-impact", "en-US");
+
+  assert.equal(section?.title, "Open Source Impact");
+  assert.deepEqual(section?.fields, []);
+});
+
+test("custom module projection keeps visible text and date fields in layout order", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.customModules = [{
+    id: "custom-publications",
+    title: "Publications",
+    fields: [
+      { id: "title", label: "Title", type: "text", value: "Terminal Resume Systems", visible: true },
+      { id: "period", label: "Period", type: "date", value: { start: "2025-01", end: "2025-03", isPresent: false }, visible: true },
+      { id: "body", label: "Notes", type: "textarea", value: "- Built shared preview/PDF projection", visible: true },
+    ],
+  }];
+
+  const section = projectCustomModuleSection(draft, "custom-publications", "en-US");
+
+  assert.deepEqual(section?.fields.map(({ field, value }) => [field.id, value]), [
+    ["title", "Terminal Resume Systems"],
+    ["period", "2025.01 — 2025.03"],
+    ["body", "- Built shared preview/PDF projection"],
+  ]);
+});
 
 test("job radar English mode uses localized default criteria without CJK text", () => {
   const criteria = createDefaultJobRadarCriteria("en-US");

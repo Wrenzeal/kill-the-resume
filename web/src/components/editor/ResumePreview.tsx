@@ -3,15 +3,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
-import { formatDateRange } from "@/lib/date-range";
 import { markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import { getResumeDensity } from "@/lib/resume-metrics";
 import { getModuleDefinition, getOrderedFields, isEditorModule } from "@/lib/resume-layout";
-import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
+import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectCustomModuleSection, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
 import { splitSkillTags } from "@/lib/skills";
 import { useEditorStore } from "@/store/editor-store";
-import type { CustomModuleField, EditorModule, ModuleLayout, ResumeDraft } from "@/types/resume";
+import type { EditorModule, ModuleLayout, ResumeDraft } from "@/types/resume";
 
 const densityLabelKeys: Record<ReturnType<typeof getResumeDensity>["level"], TranslationKey> = {
   stable: "density.stable",
@@ -357,25 +356,16 @@ function renderGenericModule(draft: ResumeDraft, module: EditorModule, t: (key: 
   );
 }
 
-function customFieldValue(field: CustomModuleField, language: Language) {
-  if (field.type === "date") return formatDateRange(field.value, language);
-  return String(field.value ?? "");
-}
-
 function renderCustomModule(draft: ResumeDraft, moduleId: string, language: Language) {
-  const customModule = draft.customModules.find((module) => module.id === moduleId);
-  if (!customModule) return null;
+  const customSection = projectCustomModuleSection(draft, moduleId, language);
+  if (!customSection) return null;
 
-  const fields = customModule.fields
-    .filter((field) => field.visible)
-    .map((field) => ({ field, value: customFieldValue(field, language) }))
-    .filter(({ value }) => value.trim());
-
-  if (!fields.length) return null;
+  const { fields, title } = customSection;
 
   return (
     <section className="mt-3.5">
-      <PreviewSectionTitle>{customModule.title}</PreviewSectionTitle>
+      <PreviewSectionTitle>{title}</PreviewSectionTitle>
+      {fields.length ? (
       <div className="mt-2 space-y-2 border-l-2 border-[var(--resume-accent)] pl-4">
         {fields.map(({ field, value }, index) => {
           if (index === 0 && field.type === "text") {
@@ -403,6 +393,7 @@ function renderCustomModule(draft: ResumeDraft, moduleId: string, language: Lang
           );
         })}
       </div>
+      ) : null}
     </section>
   );
 }
@@ -444,7 +435,7 @@ function PreviewPaper({
         style={{ transform: `scaleY(${scale})`, "--resume-content-scale-y": scale } as CSSProperties}
       >
         {children}
-        <footer className="mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-2 font-mono text-[8px] tracking-[0.16em] text-slate-400">
+        <footer data-resume-footer className="mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-2 font-mono text-[8px] tracking-[0.16em] text-slate-400">
           <span className="min-w-0 truncate">
             {exportTargetLabel}: {targetRole}
           </span>
@@ -477,14 +468,17 @@ export function ResumePreview() {
   const measureContentRef = useRef<HTMLDivElement | null>(null);
   const [fitScale, setFitScale] = useState(1);
   const [layoutFitScale, setLayoutFitScale] = useState(1);
+  const [measuredPageSplitIndex, setMeasuredPageSplitIndex] = useState<number | null>(null);
 
   const visibleModules = draft.layout.modules.filter((module) => module.visible && module.id !== "export");
   const moduleNodes = visibleModules.flatMap((module) => renderVisibleModule(draft, module, t, language));
   const measurementModuleNodes = visibleModules.flatMap((module) => renderVisibleModule(draft, module, t, language));
   const shouldUseTwoPages = (layoutFitScale < twoPageThreshold || density.level === "critical") && moduleNodes.length > 1;
   const pageCount = shouldUseTwoPages ? 2 : 1;
-  const pageOneModules = pageCount === 1 ? moduleNodes : moduleNodes.slice(0, Math.ceil(moduleNodes.length / 2));
-  const pageTwoModules = pageCount === 1 ? [] : moduleNodes.slice(Math.ceil(moduleNodes.length / 2));
+  const fallbackSplitIndex = Math.ceil(moduleNodes.length / 2);
+  const pageSplitIndex = pageCount === 1 ? moduleNodes.length : Math.min(Math.max(measuredPageSplitIndex ?? fallbackSplitIndex, 1), moduleNodes.length - 1);
+  const pageOneModules = pageCount === 1 ? moduleNodes : moduleNodes.slice(0, pageSplitIndex);
+  const pageTwoModules = pageCount === 1 ? [] : moduleNodes.slice(pageSplitIndex);
   const previewScale = pageCount === 2 ? Math.max(0.72, Math.min(1, fitScale)) : Math.min(density.compression, fitScale);
 
   useEffect(() => {
@@ -502,6 +496,36 @@ export function ResumePreview() {
 
       const nextScale = Number(Math.min(1, Math.max(0.42, (paper.clientHeight - 2) / content.scrollHeight)).toFixed(3));
       setLayoutFitScale((currentScale) => (Math.abs(currentScale - nextScale) > 0.004 ? nextScale : currentScale));
+
+      const moduleElements = Array.from(content.querySelectorAll<HTMLElement>("[data-resume-measure-module]"));
+      if (moduleElements.length > 1) {
+        const header = content.querySelector<HTMLElement>("[data-resume-identity-header]");
+        const footer = content.querySelector<HTMLElement>("[data-resume-footer]");
+        const contentRect = content.getBoundingClientRect();
+        const footerHeight = footer?.getBoundingClientRect().height ?? 0;
+        const headerBottom = header ? header.getBoundingClientRect().bottom - contentRect.top : 0;
+        const usableHeight = Math.max(1, paper.clientHeight - footerHeight - 2);
+        const firstPageModuleCapacity = Math.max(1, usableHeight - headerBottom);
+        let usedHeight = 0;
+        let nextSplitIndex = 1;
+
+        moduleElements.forEach((element, index) => {
+          const rect = element.getBoundingClientRect();
+          const nextHeight = Math.max(0, rect.bottom - rect.top);
+
+          if (index > 0 && usedHeight + nextHeight > firstPageModuleCapacity) {
+            return;
+          }
+
+          usedHeight += nextHeight;
+          nextSplitIndex = index + 1;
+        });
+
+        nextSplitIndex = Math.min(Math.max(nextSplitIndex, 1), moduleElements.length - 1);
+        setMeasuredPageSplitIndex((current) => (current === nextSplitIndex ? current : nextSplitIndex));
+      } else {
+        setMeasuredPageSplitIndex((current) => (current === null ? current : null));
+      }
     };
 
     frame = window.requestAnimationFrame(updateLayoutFitScale);
@@ -580,7 +604,7 @@ export function ResumePreview() {
           exportTargetLabel={t("preview.exportTarget")}
         >
           <PreviewIdentityHeader draft={draft} t={t} />
-          {measurementModuleNodes.map(({ module, node }) => <div key={`measure-${module}`}>{node}</div>)}
+          {measurementModuleNodes.map(({ module, node }) => <div key={`measure-${module}`} data-resume-measure-module>{node}</div>)}
         </PreviewPaper>
       </div>
 

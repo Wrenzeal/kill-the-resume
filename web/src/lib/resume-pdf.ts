@@ -1,14 +1,13 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { getApiBaseUrl } from "@/lib/api";
-import { formatDateRange } from "@/lib/date-range";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import { getOrderedFields } from "@/lib/resume-layout";
-import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
+import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectCustomModuleSection, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
 import { hexToRgbTuple } from "@/lib/resume-theme";
 import { splitSkillTags } from "@/lib/skills";
 import type { Language, TranslationKey } from "@/lib/i18n";
-import type { CustomModule, CustomModuleField, EditorModule, ResumeDraft } from "@/types/resume";
+import type { EditorModule, ResumeDraft } from "@/types/resume";
 
 type PdfTextStyle = "normal" | "bold";
 type PdfFontRole = "sans" | "mono";
@@ -866,41 +865,50 @@ function addSkillsBlock(blocks: PdfBlock[], draft: ResumeDraft, t: PdfTranslate)
   });
 }
 
-function customFieldText(field: CustomModuleField, language: Language) {
-  if (field.type === "date") return formatDateRange(field.value, language);
-  return String(field.value ?? "");
+function addSectionTitleOnlyBlock(blocks: PdfBlock[], title: string) {
+  const safeTitle = safeText(title);
+  if (!safeTitle) return;
+
+  addFlowBlock(blocks, 0, () => undefined, { includeTitle: safeTitle });
 }
 
-function addCustomModuleBlocks(blocks: PdfBlock[], module: CustomModule) {
-  const fields = module.fields.filter((field) => field.visible);
-  if (!fields.length) return;
+function addCustomModuleBlocks(blocks: PdfBlock[], draft: ResumeDraft, moduleId: string) {
+  const customSection = projectCustomModuleSection(draft, moduleId, activePdfLanguage);
+  if (!customSection) return;
 
-  let titlePending: string | undefined = module.title;
+  const { fields, title } = customSection;
+  if (!fields.length) {
+    addSectionTitleOnlyBlock(blocks, title);
+    addGapBlock(blocks, layout.itemGap);
+    return;
+  }
+
+  let titlePending: string | undefined = title;
   let drewAnyField = false;
   const maxWidth = 171;
 
-  fields.forEach((field, fieldIndex) => {
-    const value = field.type === "textarea" ? rawText(customFieldText(field, activePdfLanguage)) : safeText(customFieldText(field, activePdfLanguage));
-    if (!value) return;
+  fields.forEach(({ field, value }, fieldIndex) => {
+    const renderedValue = field.type === "textarea" ? rawText(value) : safeText(value);
+    if (!renderedValue) return;
 
     if (fieldIndex === 0 && field.type === "text") {
       const label = safeText(field.label);
       if (label) {
-        addLabelValueFieldBlocks(blocks, label, value, maxWidth, 7.4, "sans", theme.ink, {
+        addLabelValueFieldBlocks(blocks, label, renderedValue, maxWidth, 7.4, "sans", theme.ink, {
           includeTitle: titlePending,
           bordered: true,
           borderColor: activePdfAccent,
         });
       } else {
-      addHeaderFieldBlocks(blocks, value, maxWidth, {
-        includeTitle: titlePending,
-        bordered: true,
-        borderColor: activePdfAccent,
-      });
+        addHeaderFieldBlocks(blocks, renderedValue, maxWidth, {
+          includeTitle: titlePending,
+          bordered: true,
+          borderColor: activePdfAccent,
+        });
       }
     } else {
-      const lines = field.type === "textarea" ? splitList(value) : [value];
-      const text = lines.length > 1 ? lines.join(" / ") : value;
+      const lines = field.type === "textarea" ? splitList(renderedValue) : [renderedValue];
+      const text = lines.length > 1 ? lines.join(" / ") : renderedValue;
       addLabelValueFieldBlocks(blocks, safeText(field.label), field.type === "date" ? upper(text) : text, maxWidth, field.type === "date" ? 6.4 : 7.4, field.type === "date" ? "mono" : "sans", field.type === "date" ? theme.muted : theme.ink, {
         includeTitle: titlePending,
         bordered: true,
@@ -919,10 +927,8 @@ function buildBlocks(draft: ResumeDraft, t: PdfTranslate) {
   const blocks: PdfBlock[] = [];
 
   for (const moduleLayout of draft.layout.modules.filter((item) => item.visible)) {
-    const customModule = draft.customModules.find((module) => module.id === moduleLayout.id);
-
-    if (customModule) {
-      addCustomModuleBlocks(blocks, customModule);
+    if (projectCustomModuleSection(draft, moduleLayout.id, activePdfLanguage)) {
+      addCustomModuleBlocks(blocks, draft, moduleLayout.id);
       continue;
     }
 

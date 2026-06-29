@@ -524,3 +524,8 @@
 - 修复机会雷达刷新岗位源后插件导入岗位不显示的问题：`refresh=1` 现在只替换当前搜索范围里的 Remotive 在线源关联，不再删除同一 `searchFingerprint` 下 Boss/插件/手动导入岗位的 `job_search_results` 关联。这样数据库中已导入的岗位会继续随当前搜索范围返回，刷新源只更新在线源 30 条。
 - 新增后端回归测试 `TestForceRefreshPreservesImportedJobsInScope`，覆盖“当前范围已有导入岗位 + 旧 Remotive 岗位，强制刷新后保留导入岗位、替换旧在线源岗位”的场景。
 - 本轮验证通过：`cd backend && go test ./internal/jobradar`、`npm run backend:test`、`npm run backend:build`、`git diff --check`；生产后端已通过 `npm run deploy:killer:backend` 重建并重启，PM2 `kill-the-resume-backend` online，`https://api.killer.wrenzeal.top/healthz` 返回 `{"status":"ok"}`。
+
+
+- 修复自定义简历模块在右侧预览和 PDF 导出中缺失的问题：新增共享 `projectCustomModuleSection` 投影，自定义模块标题即使字段暂未填写也会显示，文本、长文本和结构化日期字段在预览/PDF 中保持一致。
+- 优化右侧预览双页拆分页：预览现在用隐藏测量纸张按实际模块高度计算第一页可容纳模块，减少预览长度/分页与 PDF 导出估算不一致的问题。
+- 新增前端回归测试覆盖自定义模块空字段标题投影、可见字段与日期格式投影；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`git diff --check`。
