@@ -1,35 +1,21 @@
 "use client";
 
-import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
-import { markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
-import type { Language, TranslationKey } from "@/lib/i18n";
-import { createResumePaperLayoutPlan } from "@/lib/resume-paper-layout";
+import { parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
+import type { TranslationKey } from "@/lib/i18n";
+import { createResumePaperLayoutPlan, resumePaperMetrics, type PaperBlock } from "@/lib/resume-paper-layout";
 import { getResumeDensity } from "@/lib/resume-metrics";
-import { getModuleDefinition, getOrderedFields, isEditorModule } from "@/lib/resume-layout";
-import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectCustomModuleSection, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
+import { fieldCaption, isResumeFieldVisible, projectIdentityContact, projectSkillSection } from "@/lib/resume-projection";
 import { splitSkillTags } from "@/lib/skills";
 import { useEditorStore } from "@/store/editor-store";
-import type { EditorModule, ModuleLayout, ResumeDraft } from "@/types/resume";
+import type { ResumeDraft } from "@/types/resume";
 
 const densityLabelKeys: Record<ReturnType<typeof getResumeDensity>["level"], TranslationKey> = {
   stable: "density.stable",
   warning: "density.warning",
   critical: "density.critical",
-};
-
-function previewPlainText(value: string | undefined | null) {
-  return markdownToPlainText(value, { preserveBlankLines: true });
-}
-
-function previewFirstLine(value: string | undefined | null) {
-  return previewPlainText(value).split("\n").find(Boolean) ?? "";
-}
-
-type PreviewModuleNode = {
-  module: string;
-  node: ReactNode;
 };
 
 function PreviewSectionTitle({ children }: { children: ReactNode }) {
@@ -189,133 +175,150 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
   );
 }
 
-function PreviewFieldList({
-  fields,
-  item,
-  t,
-  language,
-}: {
-  fields: ReturnType<typeof getOrderedFields>;
-  item: ResumeItem;
-  t: (key: TranslationKey) => string;
-  language: Language;
-}) {
+function mmToPercent(value: number) {
+  return `${(value / resumePaperMetrics.page.height) * 100}%`;
+}
+
+function blockHeightStyle(block: PaperBlock): CSSProperties {
+  if (block.kind === "gap") return { height: mmToPercent(block.estimate) };
+  return { minHeight: mmToPercent(block.estimate) };
+}
+
+function PreviewBlockSectionTitle({ title }: { title?: string }) {
+  if (!title) return null;
+
   return (
-    <div className="space-y-1.5">
-      {fields.map((field, index) => {
-        const value = projectResumeItemFieldText(item, field.id, language);
-
-        if (!value.trim()) {
-          return null;
-        }
-
-        if (index === 0) {
-          const titleValue = previewFirstLine(value) || value;
-
-          return (
-            <h3 key={field.id} className="text-[15px] font-black uppercase tracking-[-0.03em] text-slate-950">
-              {titleValue}
-            </h3>
-          );
-        }
-
-        const isMeta = isResumeMetaField(field.id);
-        const plainValue = previewPlainText(value);
-
-        if (isMeta) {
-          return (
-            <p key={field.id} className="font-mono text-[9px] uppercase leading-[1.35] tracking-[0.14em] text-slate-600">
-              <span className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                {fieldCaption(t(field.labelKey))}:{" "}
-              </span>
-              {plainValue}
-            </p>
-          );
-        }
-
-        return (
-          <div
-            key={field.id}
-            className="space-y-0.5 text-[10.5px] leading-[1.35] text-slate-800"
-          >
-            <p className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">
-              {fieldCaption(t(field.labelKey))}:{" "}
-            </p>
-            <PreviewMarkdownText value={value} />
-          </div>
-        );
-      })}
+    <div className="pb-[2.3%] pt-[1.4%]">
+      <PreviewSectionTitle>{title}</PreviewSectionTitle>
+      <div className="mt-[1.7%] h-px bg-[var(--resume-accent)]" />
     </div>
   );
 }
 
-function renderGenericModule(draft: ResumeDraft, module: EditorModule, t: (key: TranslationKey) => string, language: Language) {
-  const definition = getModuleDefinition(module);
-  const fields = getOrderedFields(module, draft.layout.fields[module]).filter((field) => field.visible);
-  const items = getResumeModuleItems(draft, module);
+function PreviewPaperBlock({ block }: { block: PaperBlock }) {
+  const data = block.data ?? {};
+  const label = typeof data.label === "string" ? data.label : "";
+  const line = typeof data.line === "string" ? data.line : "";
+  const valueSize = typeof data.valueSize === "number" ? data.valueSize : 7.4;
+  const isMeta = Boolean(data.meta || data.date);
+  const isBordered = Boolean(data.bordered);
+  const blockStyle = blockHeightStyle(block);
+  const bodyClass = cn(isBordered ? "border-l-2 border-[var(--resume-accent)] pl-4" : "");
 
-  if (module === "identity") {
+  if (block.kind === "gap") return <div aria-hidden="true" style={blockStyle} />;
+
+  if (block.kind === "section-title-only") {
     return (
-      <div className="space-y-2">
-        {isResumeFieldVisible(draft, "identity", "summary") ? (
-          <section className="mt-3">
-            <PreviewSectionTitle>{t("preview.summary")}</PreviewSectionTitle>
-            <PreviewMarkdownText value={draft.identity.summary || t("identity.summaryPlaceholder")} className="mt-1.5" />
-          </section>
-        ) : null}
-      </div>
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+      </section>
     );
   }
 
-  if (module === "projects") {
+  if (block.kind === "summary-line") {
     return (
-      <section className="mt-3.5">
-        <PreviewSectionTitle>{t("preview.projectExperience")}</PreviewSectionTitle>
-        <div className="mt-2 space-y-3">
-          {draft.projects.map((project) => (
-            <div key={project.id} className="border-l-2 border-[var(--resume-accent)] pl-4">
-              <PreviewFieldList fields={fields} item={project} t={t} language={language} />
-            </div>
-          ))}
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <p className="text-[10.5px] leading-[1.35] text-slate-800">{line}</p>
+      </section>
+    );
+  }
+
+  if (block.kind === "header-field-line") {
+    return (
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <div className={bodyClass}>
+          <h3 className="text-[15px] font-black uppercase tracking-[-0.03em] text-slate-950">{line}</h3>
         </div>
       </section>
     );
   }
 
-  if (module === "work") {
+  if (block.kind === "label-value-line") {
+    const lineIndex = typeof data.lineIndex === "number" ? data.lineIndex : 0;
+
     return (
-      <section className="mt-3.5">
-        <PreviewSectionTitle>{t("preview.workHistory")}</PreviewSectionTitle>
-        <div className="mt-2 space-y-3">
-          {draft.work.map((work) => (
-            <div key={work.id} className="border-l-2 border-[var(--resume-accent)] pl-4">
-              <PreviewFieldList fields={fields} item={work} t={t} language={language} />
-            </div>
-          ))}
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <div
+          className={cn(
+            bodyClass,
+            isMeta
+              ? "font-mono text-[9px] uppercase leading-[1.35] tracking-[0.14em] text-slate-600"
+              : "text-[10.5px] leading-[1.35] text-slate-800",
+          )}
+        >
+          {lineIndex === 0 && label ? (
+            <span className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">
+              {fieldCaption(label)}:{" "}
+            </span>
+          ) : null}
+          <span style={{ fontSize: isMeta ? undefined : `${valueSize + 3.1}px` }}>{line}</span>
         </div>
       </section>
     );
   }
 
-  if (module === "skills") {
-    const skillSection = projectSkillSection(draft);
-    if (!skillSection.categories.length) return null;
+  if (block.kind === "markdown-label") {
+    return (
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <div className={bodyClass}>
+          <p className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{fieldCaption(label)}:</p>
+        </div>
+      </section>
+    );
+  }
 
-    const columnsClass = skillSection.columnMode === "one" ? "grid-cols-1" : "grid-cols-2";
+  if (block.kind === "markdown-line") {
+    const markdownBlock = data.block as MarkdownBlock | undefined;
+    const type = markdownBlock?.type ?? "paragraph";
+    const ordered = Boolean(markdownBlock && "ordered" in markdownBlock && markdownBlock.ordered);
+    const order = markdownBlock && "order" in markdownBlock ? markdownBlock.order : undefined;
 
     return (
-      <section className="mt-3.5">
-        <PreviewSectionTitle>{t("preview.skillsMatrix")}</PreviewSectionTitle>
-        <dl className={cn("mt-2 grid gap-3", columnsClass)}>
-          {skillSection.categories.map((category) => (
+      <section style={blockStyle}>
+        <div className={bodyClass}>
+          {type === "heading" ? (
+            <p className="text-[12.5px] font-black uppercase tracking-[-0.025em] text-slate-950">{line}</p>
+          ) : type === "bullet" ? (
+            <div className="flex gap-2.5 text-[10.5px] leading-[1.35] text-slate-800">
+              {ordered ? (
+                <span className="min-w-4 shrink-0 font-mono text-[8.5px] font-bold leading-[1.55] text-[var(--resume-accent)]">
+                  {order ?? 1}.
+                </span>
+              ) : (
+                <span className="mt-[0.45rem] h-1 w-1 shrink-0 bg-[var(--resume-accent)]" />
+              )}
+              <span>{line}</span>
+            </div>
+          ) : type === "quote" ? (
+            <p className="border-l border-[var(--resume-accent)] pl-2 text-[10.5px] italic leading-[1.35] text-slate-700">{line}</p>
+          ) : type === "code" ? (
+            <pre className="whitespace-pre-wrap break-words bg-slate-100 px-2 py-1 font-mono text-[8.5px] leading-[1.35] text-slate-700">{line}</pre>
+          ) : (
+            <p className="whitespace-pre-line text-[10.5px] leading-[1.35] text-slate-800">{line}</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  if (block.kind === "skills-row") {
+    const categories = Array.isArray(data.categories) ? (data.categories as ReturnType<typeof projectSkillSection>["categories"]) : [];
+    const displayMode = data.displayMode === "tags" ? "tags" : "markdown";
+    const columnCount = data.columnCount === 1 ? 1 : 2;
+
+    return (
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <dl className={cn("grid gap-3", columnCount === 1 ? "grid-cols-1" : "grid-cols-2")}>
+          {categories.map((category) => (
             <div key={category.id} className="min-w-0">
-              <dt className="font-mono text-[9.6px] font-black uppercase tracking-[0.16em] text-[var(--resume-accent)]">{fieldCaption(category.label)}</dt>
+              <dt className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{fieldCaption(category.label)}</dt>
               <dd className="mt-1">
-                {skillSection.displayMode === "tags" ? (
-                  <PreviewSkillTags value={category.content} />
-                ) : (
-                  <PreviewMarkdownText value={category.content} />
-                )}
+                {displayMode === "tags" ? <PreviewSkillTags value={category.content} /> : <PreviewMarkdownText value={category.content} />}
               </dd>
             </div>
           ))}
@@ -324,75 +327,16 @@ function renderGenericModule(draft: ResumeDraft, module: EditorModule, t: (key: 
     );
   }
 
-  if (module === "education") {
-    return (
-      <section className="mt-3.5">
-        <PreviewSectionTitle>{t("preview.education")}</PreviewSectionTitle>
-        <div className="mt-2 space-y-3">
-          {draft.education.map((education) => (
-            <div key={education.id} className="text-[10.5px] leading-[1.35] text-slate-800">
-              <PreviewFieldList fields={fields} item={education} t={t} language={language} />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="mt-3.5">
-      <PreviewSectionTitle>{t(definition.labelKey)}</PreviewSectionTitle>
-      <dl className="mt-2 space-y-1 font-mono text-[8.5px] uppercase tracking-[0.14em] text-slate-500">
-        {fields.map((field) => (
-          <div key={field.id} className="flex gap-2">
-            <dt className="text-slate-950">{t(field.labelKey).split("·")[0]}</dt>
-            <dd>{String(items[0]?.[field.id] ?? "")}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
+  return null;
 }
 
-function renderCustomModule(draft: ResumeDraft, moduleId: string, language: Language) {
-  const customSection = projectCustomModuleSection(draft, moduleId, language);
-  if (!customSection) return null;
-
-  const { fields, title } = customSection;
-
+function PreviewPaperPage({ blocks }: { blocks: PaperBlock[] }) {
   return (
-    <section className="mt-3.5">
-      <PreviewSectionTitle>{title}</PreviewSectionTitle>
-      {fields.length ? (
-      <div className="mt-2 space-y-2 border-l-2 border-[var(--resume-accent)] pl-4">
-        {fields.map(({ field, value }, index) => {
-          if (index === 0 && field.type === "text") {
-            const titleValue = previewFirstLine(value) || value;
-
-            return (
-              <div key={field.id}>
-                <p className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{field.label}</p>
-                <h3 className="text-[15px] font-black uppercase tracking-[-0.03em] text-slate-950">
-                  {titleValue}
-                </h3>
-              </div>
-            );
-          }
-
-          return (
-            <div key={field.id} className="text-[10.5px] leading-[1.35] text-slate-800">
-              <p className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{field.label}</p>
-              {field.type === "textarea" ? (
-                <PreviewMarkdownText value={value} />
-              ) : (
-                <p className={cn(field.type === "date" ? "font-mono text-[9px] uppercase tracking-[0.14em] text-slate-600" : "whitespace-pre-line")}>{previewPlainText(value)}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      ) : null}
-    </section>
+    <div className="min-h-0 flex-1">
+      {blocks.map((block, index) => (
+        <PreviewPaperBlock key={`${block.kind}-${index}-${block.sectionTitle ?? ""}-${block.estimate}`} block={block} />
+      ))}
+    </div>
   );
 }
 
@@ -403,7 +347,7 @@ function PreviewPaper({
   accentColor,
   targetRole,
   exportTargetLabel,
-  measurement = false,
+  variant = "side",
 }: {
   children: ReactNode;
   pageNumber: number;
@@ -411,14 +355,14 @@ function PreviewPaper({
   accentColor: string;
   targetRole: string;
   exportTargetLabel: string;
-  measurement?: boolean;
+  variant?: "side" | "large";
 }) {
   return (
     <article
       data-resume-paper
       className={cn(
         "a4-paper transition-transform duration-200",
-        measurement ? "w-[500px] shadow-none" : "w-[min(31vw,500px)] min-w-[360px] shadow-2xl shadow-black",
+        variant === "large" ? "w-[min(86vw,820px)] shadow-2xl shadow-black" : "w-[min(31vw,500px)] min-w-[360px] shadow-2xl shadow-black",
       )}
       style={{ "--resume-accent": accentColor } as CSSProperties}
     >
@@ -438,13 +382,6 @@ function PreviewPaper({
   );
 }
 
-function renderVisibleModule(draft: ResumeDraft, module: ModuleLayout, t: (key: TranslationKey) => string, language: Language): PreviewModuleNode[] {
-  const node = isEditorModule(module.id)
-    ? renderGenericModule(draft, module.id, t, language)
-    : renderCustomModule(draft, module.id, language);
-
-  return node ? [{ module: module.id, node }] : [];
-}
 
 
 export function ResumePreview() {
@@ -454,20 +391,21 @@ export function ResumePreview() {
   const draft = useEditorStore((state) => state.draft);
   const accentColor = draft.theme.accentColor;
   const density = useMemo(() => getResumeDensity(draft), [draft]);
+  const [largePreviewOpen, setLargePreviewOpen] = useState(false);
   const layoutPlan = useMemo(() => createResumePaperLayoutPlan(draft, t, { language }), [draft, language, t]);
-  const visibleModules = draft.layout.modules.filter((module) => module.visible && module.id !== "export");
-  const moduleNodes = visibleModules.flatMap((module) => renderVisibleModule(draft, module, t, language));
   const pageCount = layoutPlan.pageCount;
   const previewScale = layoutPlan.densityScale;
-  const moduleFirstPage = new Map<string, number>();
-  layoutPlan.pages.forEach((page, pageIndex) => {
-    page.forEach((block) => {
-      const moduleId = typeof block.data?.module === "string" ? block.data.module : "";
-      if (moduleId && !moduleFirstPage.has(moduleId)) moduleFirstPage.set(moduleId, pageIndex);
-    });
-  });
-  const pageOneModules = pageCount === 1 ? moduleNodes : moduleNodes.filter(({ module }) => (moduleFirstPage.get(module) ?? 0) === 0);
-  const pageTwoModules = pageCount === 1 ? [] : moduleNodes.filter(({ module }) => moduleFirstPage.get(module) === 1);
+
+  useEffect(() => {
+    if (!largePreviewOpen) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLargePreviewOpen(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [largePreviewOpen]);
 
   if (!previewVisible) return null;
 
@@ -480,6 +418,13 @@ export function ResumePreview() {
           <span className={density.level === "stable" ? "text-[var(--cyber-green)]" : "text-[var(--warning-orange)]"}>
             {pageCount === 2 ? t("control.twoPages") : t("control.onePage")} · {t(densityLabelKeys[density.level])} · FIT {Math.round(layoutPlan.densityScale * 100)}%
           </span>
+          <button
+            type="button"
+            onClick={() => setLargePreviewOpen(true)}
+            className="border border-[rgba(88,230,255,0.36)] px-2 py-1 text-[8px] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] focus-visible:outline-none focus-visible:shadow-[0_0_16px_rgba(88,230,255,0.18)]"
+          >
+            {t("preview.largeOpen")}
+          </button>
           <button
             type="button"
             onClick={() => setPreviewVisible(false)}
@@ -506,7 +451,7 @@ export function ResumePreview() {
             exportTargetLabel={t("preview.exportTarget")}
           >
             <PreviewIdentityHeader draft={draft} t={t} />
-            {pageOneModules.map(({ module, node }) => (module === "identity" ? <div key={module}>{node}</div> : <div key={module}>{node}</div>))}
+            <PreviewPaperPage blocks={layoutPlan.pages[0] ?? []} />
           </PreviewPaper>
 
           {pageCount === 2 ? (
@@ -517,15 +462,50 @@ export function ResumePreview() {
               targetRole={draft.exportProtocol.targetRole}
               exportTargetLabel={t("preview.exportTarget")}
             >
-              {pageTwoModules.map(({ module, node }) => (
-                <div key={module}>{node}</div>
-              ))}
+              <PreviewPaperPage blocks={layoutPlan.pages[1] ?? []} />
               {layoutPlan.overflowRisk ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
             </PreviewPaper>
           ) : null}
         </div>
       </div>
       </section>
+
+      {largePreviewOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-[#05080d]/96 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("preview.largeTitle")}
+        >
+          <div className="flex items-center justify-between gap-4 border-b border-[rgba(125,139,153,0.22)] bg-[#080c11]/90 px-6 py-4 font-mono text-[11px] uppercase tracking-[0.24em] text-slate-400">
+            <div>
+              <p className="text-[var(--trace-cyan)]">{t("preview.largeTitle")}</p>
+              <p className="mt-1 text-[9px] text-slate-600">{pageCount === 2 ? t("control.twoPages") : t("control.onePage")} · FIT {Math.round(layoutPlan.densityScale * 100)}%</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLargePreviewOpen(false)}
+              className="border border-[rgba(255,138,61,0.42)] px-3 py-2 text-[10px] text-[var(--warning-orange)] transition hover:bg-[rgba(255,138,61,0.08)] focus-visible:outline-none focus-visible:shadow-[0_0_18px_rgba(255,138,61,0.22)]"
+            >
+              {t("preview.largeClose")}
+            </button>
+          </div>
+          <div className="tactical-grid tactical-scrollbar min-h-0 flex-1 overflow-auto px-8 py-8">
+            <div className={cn("mx-auto flex w-full justify-center gap-8", pageCount === 2 ? "flex-col items-center 2xl:flex-row 2xl:items-start" : "items-start")}>
+              <PreviewPaper pageNumber={1} scale={previewScale} variant="large" accentColor={accentColor} targetRole={draft.exportProtocol.targetRole} exportTargetLabel={t("preview.exportTarget")}>
+                <PreviewIdentityHeader draft={draft} t={t} />
+                <PreviewPaperPage blocks={layoutPlan.pages[0] ?? []} />
+              </PreviewPaper>
+              {pageCount === 2 ? (
+                <PreviewPaper pageNumber={2} scale={previewScale} variant="large" accentColor={accentColor} targetRole={draft.exportProtocol.targetRole} exportTargetLabel={t("preview.exportTarget")}>
+                  <PreviewPaperPage blocks={layoutPlan.pages[1] ?? []} />
+                  {layoutPlan.overflowRisk ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
+                </PreviewPaper>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

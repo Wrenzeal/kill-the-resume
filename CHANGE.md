@@ -534,3 +534,7 @@
 - 统一右侧简历预览与 PDF 导出版式规划：新增 `web/src/lib/resume-paper-layout.ts` 作为共享 A4 纸张 metrics、内容块高度估算、压缩比例和分页来源，预览不再依赖 DOM 高度/模块数量切页，PDF 不再使用独立压缩启发式。
 - 修复“预览显示更多页、实际 PDF 只有约一页半”的一致性问题：`ResumePreview` 与 `resume-pdf` 现在消费同一个 layout plan，保持最多两页 A4 的页数、压缩和溢出风险语义一致。
 - 新增回归测试覆盖共享 layout plan 的双页/压缩决策和自定义模块块归属；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 修复右侧简历预览显示不全的问题：`ResumePreview` 不再按整模块塞入页面，而是直接渲染共享 `resume-paper-layout` 产出的 `PaperBlock[]` 分页；同一个长项目/长模块可以跨页显示，避免第一页 `.a4-paper` 裁切导致右侧预览少内容。
+- 新增右侧预览“大屏预览”按钮：打开应用内全屏 A4 预览弹层，支持关闭按钮与 Esc，复用同一份分页/压缩计划，方便检查较小右栏难以看清的版式细节。
+- 新增回归测试覆盖单个项目模块跨页规划，防止后续回退到模块级预览分页；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

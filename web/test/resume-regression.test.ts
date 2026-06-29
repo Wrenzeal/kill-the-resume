@@ -462,6 +462,31 @@ test("resume paper layout plan keeps preview and PDF density decisions shared", 
   assert.ok(plan.pages.every((page) => page.length > 0));
 });
 
+test("resume paper layout plan can split one module across pages for block-level preview", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.projects = Array.from({ length: 7 }, (_, index) => ({
+    ...draft.projects[0]!,
+    id: `project-split-${index}`,
+    codename: `Split Project ${index + 1}`,
+    signal: "统一预览、分页、测量与导出路径，保证每一条内容都按同一套 A4 坐标进入页面。".repeat(4),
+    impact: "新增模块和长项目都必须在右侧预览、大屏预览、PDF 导出之间保持相同分页结果。".repeat(4),
+  }));
+  draft.work = [];
+  draft.education = [];
+  draft.layout.modules = [
+    { id: "identity", visible: true },
+    { id: "projects", visible: true },
+    { id: "export", visible: false },
+  ];
+
+  const plan = createResumePaperLayoutPlan(draft, ((key: string) => key) as never, { language: "zh-CN" });
+  const pagesWithProjects = plan.pages
+    .map((page, index) => page.some((block) => block.data?.module === "projects") ? index : -1)
+    .filter((index) => index >= 0);
+
+  assert.deepEqual([...new Set(pagesWithProjects)], [0, 1]);
+});
+
 test("resume paper layout plan preserves custom module block ownership", () => {
   const draft = structuredClone(initialResumeDraft) as ResumeDraft;
   draft.customModules = [{
