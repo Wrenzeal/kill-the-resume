@@ -18,26 +18,51 @@ const densityLabelKeys: Record<ReturnType<typeof getResumeDensity>["level"], Tra
   critical: "density.critical",
 };
 
+const densityCssVar = "var(--resume-density-scale, 1)";
+
+function scaledPx(value: number) {
+  return `calc(${value}px * ${densityCssVar})`;
+}
+
+function scaledRem(value: number) {
+  return `calc(${value}rem * ${densityCssVar})`;
+}
+
+function scaledTextStyle(size: number, lineHeight = 1.35): CSSProperties {
+  return { fontSize: scaledPx(size), lineHeight };
+}
+
+function scaledSpacingStyle(property: "gap" | "paddingBottom" | "paddingTop" | "marginTop", value: number): CSSProperties {
+  return { [property]: scaledRem(value) } as CSSProperties;
+}
+
 function PreviewSectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="font-mono text-[11.5px] font-black uppercase tracking-[0.26em] text-[var(--resume-accent)]">{children}</h2>;
+  return (
+    <h2
+      className="font-mono font-black uppercase tracking-[0.26em] text-[var(--resume-accent)]"
+      style={scaledTextStyle(11.5, 1.2)}
+    >
+      {children}
+    </h2>
+  );
 }
 
 function PreviewMarkdownBlock({ block }: { block: MarkdownBlock }) {
-  if (block.type === "blank") return <div className="h-1" />;
+  if (block.type === "blank") return <div aria-hidden="true" style={{ height: scaledRem(0.25) }} />;
 
   if (block.type === "heading") {
-    return <p className="text-[12.5px] font-black uppercase tracking-[-0.025em] text-slate-950">{block.text}</p>;
+    return <p className="font-black uppercase tracking-[-0.025em] text-slate-950" style={scaledTextStyle(12.5, 1.2)}>{block.text}</p>;
   }
 
   if (block.type === "bullet") {
     return (
-      <div className="flex gap-2.5 text-[10.5px] leading-[1.35] text-slate-800">
+      <div className="flex text-slate-800" style={{ ...scaledTextStyle(10.5), gap: scaledRem(0.625) }}>
         {block.ordered ? (
-          <span className="min-w-4 shrink-0 font-mono text-[8.5px] font-bold leading-[1.55] text-[var(--resume-accent)]">
+          <span className="shrink-0 font-mono font-bold text-[var(--resume-accent)]" style={{ ...scaledTextStyle(8.5, 1.55), minWidth: scaledRem(1) }}>
             {block.order ?? 1}.
           </span>
         ) : (
-          <span className="mt-[0.45rem] h-1 w-1 shrink-0 bg-[var(--resume-accent)]" />
+          <span className="shrink-0 bg-[var(--resume-accent)]" style={{ marginTop: scaledRem(0.45), height: scaledRem(0.25), width: scaledRem(0.25) }} />
         )}
         <span>{block.text}</span>
       </div>
@@ -45,14 +70,14 @@ function PreviewMarkdownBlock({ block }: { block: MarkdownBlock }) {
   }
 
   if (block.type === "quote") {
-    return <p className="border-l border-[var(--resume-accent)] pl-2 text-[10.5px] italic leading-[1.35] text-slate-700">{block.text}</p>;
+    return <p className="border-l border-[var(--resume-accent)] italic text-slate-700" style={{ ...scaledTextStyle(10.5), paddingLeft: scaledRem(0.5) }}>{block.text}</p>;
   }
 
   if (block.type === "code") {
-    return <pre className="whitespace-pre-wrap break-words bg-slate-100 px-2 py-1 font-mono text-[8.5px] leading-[1.35] text-slate-700">{block.text}</pre>;
+    return <pre className="whitespace-pre-wrap break-words bg-slate-100 font-mono text-slate-700" style={{ ...scaledTextStyle(8.5), padding: `${scaledRem(0.25)} ${scaledRem(0.5)}` }}>{block.text}</pre>;
   }
 
-  return <p className="whitespace-pre-line text-[10.5px] leading-[1.35] text-slate-800">{block.text}</p>;
+  return <p className="whitespace-pre-line text-slate-800" style={scaledTextStyle(10.5)}>{block.text}</p>;
 }
 
 function PreviewMarkdownText({ value, className }: { value: string; className?: string }) {
@@ -61,7 +86,7 @@ function PreviewMarkdownText({ value, className }: { value: string; className?: 
   if (!blocks.length) return null;
 
   return (
-    <div className={cn("space-y-1", className)}>
+    <div className={cn("flex flex-col", className)} style={scaledSpacingStyle("gap", 0.25)}>
       {blocks.map((block, index) => (
         <PreviewMarkdownBlock key={`${block.type}-${index}-${block.text.slice(0, 16)}`} block={block} />
       ))}
@@ -74,11 +99,12 @@ function PreviewSkillTags({ value }: { value: string }) {
   if (!tags.length) return null;
 
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap" style={{ marginTop: scaledRem(0.375), gap: scaledRem(0.375) }}>
       {tags.map((tag) => (
         <span
           key={tag}
-          className="border border-[color-mix(in_srgb,var(--resume-accent)_42%,transparent)] bg-[color-mix(in_srgb,var(--resume-accent)_7%,transparent)] px-1.5 py-0.5 text-[8.5px] font-semibold leading-[1.2] text-slate-700"
+          className="border border-[color-mix(in_srgb,var(--resume-accent)_42%,transparent)] bg-[color-mix(in_srgb,var(--resume-accent)_7%,transparent)] font-semibold text-slate-700"
+          style={{ ...scaledTextStyle(8.5, 1.2), padding: `${scaledRem(0.125)} ${scaledRem(0.375)}` }}
         >
           {tag}
         </span>
@@ -103,9 +129,10 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
     <div
       data-resume-identity-contact
       className={cn(
-        "min-w-0 text-right font-mono text-[8.5px] tracking-[0.12em] text-slate-500",
-        photo ? "w-full leading-[1.32]" : "w-full leading-4",
+        "min-w-0 text-right font-mono tracking-[0.12em] text-slate-500",
+        photo ? "w-full" : "w-full",
       )}
+      style={scaledTextStyle(8.5, photo ? 1.32 : 1.88)}
     >
       {email ? (
         <p className={cn("uppercase", photo ? "" : "truncate")} style={photo ? wrappingContactStyle : undefined}>{email}</p>
@@ -139,17 +166,17 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
   ) : null;
 
   return (
-    <header data-resume-identity-header className="border-b-2 border-[var(--resume-accent)] pb-3">
-      <div className="flex items-start justify-between gap-5">
+    <header data-resume-identity-header className="border-b-2 border-[var(--resume-accent)]" style={{ paddingBottom: scaledRem(0.75) }}>
+      <div className="flex items-start justify-between" style={{ gap: scaledRem(1.25) }}>
         <div className="min-w-0 flex-1">
           {isResumeFieldVisible(draft, "identity", "callsign") ? (
-            <p className="font-mono text-[9px] uppercase tracking-[0.35em] text-[var(--resume-accent)]">{draft.identity.callsign || t("identity.callsignPlaceholder")}</p>
+            <p className="font-mono uppercase tracking-[0.35em] text-[var(--resume-accent)]" style={scaledTextStyle(9, 1.2)}>{draft.identity.callsign || t("identity.callsignPlaceholder")}</p>
           ) : null}
           {isResumeFieldVisible(draft, "identity", "name") ? (
-            <h1 className="mt-1.5 text-3xl font-black uppercase tracking-[-0.08em] text-slate-950">{draft.identity.name || t("identity.namePlaceholder")}</h1>
+            <h1 className="font-black uppercase tracking-[-0.08em] text-slate-950" style={{ ...scaledTextStyle(30, 1.05), marginTop: scaledRem(0.375) }}>{draft.identity.name || t("identity.namePlaceholder")}</h1>
           ) : null}
           {isResumeFieldVisible(draft, "identity", "title") ? (
-            <p className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-slate-700">{draft.identity.title || t("identity.titlePlaceholder")}</p>
+            <p className="font-mono uppercase tracking-[0.2em] text-slate-700" style={{ ...scaledTextStyle(11, 1.25), marginTop: scaledRem(0.375) }}>{draft.identity.title || t("identity.titlePlaceholder")}</p>
           ) : null}
         </div>
 
@@ -157,13 +184,14 @@ function PreviewIdentityHeader({ draft, t }: { draft: ResumeDraft; t: (key: Tran
           <div
             data-resume-identity-contact-wrap
             className={cn(
-              "flex min-w-0 shrink-0 items-start justify-end gap-3",
+              "flex min-w-0 shrink-0 items-start justify-end",
               photo ? (hasContact ? "w-[248px] max-w-[56%]" : "w-16") : "w-[42%] max-w-[178px]",
             )}
+            style={{ gap: scaledRem(0.75) }}
           >
             {contactColumn}
             {photo ? (
-              <div data-resume-identity-photo className="h-20 w-16 shrink-0 overflow-hidden bg-transparent">
+              <div data-resume-identity-photo className="shrink-0 overflow-hidden bg-transparent" style={{ height: scaledRem(5), width: scaledRem(4) }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={photo} alt={t("identity.photo")} className="h-full w-full object-cover" />
               </div>
@@ -188,9 +216,9 @@ function PreviewBlockSectionTitle({ title }: { title?: string }) {
   if (!title) return null;
 
   return (
-    <div className="pb-[2.3%] pt-[1.4%]">
+    <div style={{ paddingBottom: scaledRem(0.42), paddingTop: scaledRem(0.26) }}>
       <PreviewSectionTitle>{title}</PreviewSectionTitle>
-      <div className="mt-[1.7%] h-px bg-[var(--resume-accent)]" />
+      <div className="h-px bg-[var(--resume-accent)]" style={{ marginTop: scaledRem(0.32) }} />
     </div>
   );
 }
@@ -203,7 +231,8 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
   const isMeta = Boolean(data.meta || data.date);
   const isBordered = Boolean(data.bordered);
   const blockStyle = blockHeightStyle(block);
-  const bodyClass = cn(isBordered ? "border-l-2 border-[var(--resume-accent)] pl-4" : "");
+  const bodyClass = cn(isBordered ? "border-l-2 border-[var(--resume-accent)]" : "");
+  const bodyStyle = isBordered ? { paddingLeft: scaledRem(1) } : undefined;
 
   if (block.kind === "gap") return <div aria-hidden="true" style={blockStyle} />;
 
@@ -219,7 +248,7 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
     return (
       <section style={blockStyle}>
         <PreviewBlockSectionTitle title={block.sectionTitle} />
-        <p className="text-[10.5px] leading-[1.35] text-slate-800">{line}</p>
+        <p className="text-slate-800" style={scaledTextStyle(10.5)}>{line}</p>
       </section>
     );
   }
@@ -228,8 +257,8 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
     return (
       <section style={blockStyle}>
         <PreviewBlockSectionTitle title={block.sectionTitle} />
-        <div className={bodyClass}>
-          <h3 className="text-[15px] font-black uppercase tracking-[-0.03em] text-slate-950">{line}</h3>
+        <div className={bodyClass} style={bodyStyle}>
+          <h3 className="font-black uppercase tracking-[-0.03em] text-slate-950" style={scaledTextStyle(15, 1.2)}>{line}</h3>
         </div>
       </section>
     );
@@ -245,16 +274,17 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
           className={cn(
             bodyClass,
             isMeta
-              ? "font-mono text-[9px] uppercase leading-[1.35] tracking-[0.14em] text-slate-600"
-              : "text-[10.5px] leading-[1.35] text-slate-800",
+              ? "font-mono uppercase tracking-[0.14em] text-slate-600"
+              : "text-slate-800",
           )}
+          style={bodyStyle}
         >
           {lineIndex === 0 && label ? (
-            <span className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            <span className="font-mono font-bold uppercase tracking-[0.14em] text-slate-400" style={scaledTextStyle(8.8, 1.35)}>
               {fieldCaption(label)}:{" "}
             </span>
           ) : null}
-          <span style={{ fontSize: isMeta ? undefined : `${valueSize + 3.1}px` }}>{line}</span>
+          <span style={scaledTextStyle(isMeta ? 9 : valueSize + 3.1, 1.35)}>{line}</span>
         </div>
       </section>
     );
@@ -264,8 +294,8 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
     return (
       <section style={blockStyle}>
         <PreviewBlockSectionTitle title={block.sectionTitle} />
-        <div className={bodyClass}>
-          <p className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{fieldCaption(label)}:</p>
+        <div className={bodyClass} style={bodyStyle}>
+          <p className="font-mono font-bold uppercase tracking-[0.14em] text-slate-400" style={scaledTextStyle(8.8, 1.35)}>{fieldCaption(label)}:</p>
         </div>
       </section>
     );
@@ -279,26 +309,26 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
 
     return (
       <section style={blockStyle}>
-        <div className={bodyClass}>
+        <div className={bodyClass} style={bodyStyle}>
           {type === "heading" ? (
-            <p className="text-[12.5px] font-black uppercase tracking-[-0.025em] text-slate-950">{line}</p>
+            <p className="font-black uppercase tracking-[-0.025em] text-slate-950" style={scaledTextStyle(12.5, 1.2)}>{line}</p>
           ) : type === "bullet" ? (
-            <div className="flex gap-2.5 text-[10.5px] leading-[1.35] text-slate-800">
+            <div className="flex text-slate-800" style={{ ...scaledTextStyle(10.5), gap: scaledRem(0.625) }}>
               {ordered ? (
-                <span className="min-w-4 shrink-0 font-mono text-[8.5px] font-bold leading-[1.55] text-[var(--resume-accent)]">
+                <span className="shrink-0 font-mono font-bold text-[var(--resume-accent)]" style={{ ...scaledTextStyle(8.5, 1.55), minWidth: scaledRem(1) }}>
                   {order ?? 1}.
                 </span>
               ) : (
-                <span className="mt-[0.45rem] h-1 w-1 shrink-0 bg-[var(--resume-accent)]" />
+                <span className="shrink-0 bg-[var(--resume-accent)]" style={{ marginTop: scaledRem(0.45), height: scaledRem(0.25), width: scaledRem(0.25) }} />
               )}
               <span>{line}</span>
             </div>
           ) : type === "quote" ? (
-            <p className="border-l border-[var(--resume-accent)] pl-2 text-[10.5px] italic leading-[1.35] text-slate-700">{line}</p>
+            <p className="border-l border-[var(--resume-accent)] italic text-slate-700" style={{ ...scaledTextStyle(10.5), paddingLeft: scaledRem(0.5) }}>{line}</p>
           ) : type === "code" ? (
-            <pre className="whitespace-pre-wrap break-words bg-slate-100 px-2 py-1 font-mono text-[8.5px] leading-[1.35] text-slate-700">{line}</pre>
+            <pre className="whitespace-pre-wrap break-words bg-slate-100 font-mono text-slate-700" style={{ ...scaledTextStyle(8.5), padding: `${scaledRem(0.25)} ${scaledRem(0.5)}` }}>{line}</pre>
           ) : (
-            <p className="whitespace-pre-line text-[10.5px] leading-[1.35] text-slate-800">{line}</p>
+            <p className="whitespace-pre-line text-slate-800" style={scaledTextStyle(10.5)}>{line}</p>
           )}
         </div>
       </section>
@@ -313,11 +343,11 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
     return (
       <section style={blockStyle}>
         <PreviewBlockSectionTitle title={block.sectionTitle} />
-        <dl className={cn("grid gap-3", columnCount === 1 ? "grid-cols-1" : "grid-cols-2")}>
+        <dl className={cn("grid", columnCount === 1 ? "grid-cols-1" : "grid-cols-2")} style={scaledSpacingStyle("gap", 0.75)}>
           {categories.map((category) => (
             <div key={category.id} className="min-w-0">
-              <dt className="font-mono text-[8.8px] font-bold uppercase tracking-[0.14em] text-slate-400">{fieldCaption(category.label)}</dt>
-              <dd className="mt-1">
+              <dt className="font-mono font-bold uppercase tracking-[0.14em] text-slate-400" style={scaledTextStyle(8.8, 1.35)}>{fieldCaption(category.label)}</dt>
+              <dd style={{ marginTop: scaledRem(0.25) }}>
                 {displayMode === "tags" ? <PreviewSkillTags value={category.content} /> : <PreviewMarkdownText value={category.content} />}
               </dd>
             </div>
@@ -362,16 +392,16 @@ function PreviewPaper({
       data-resume-paper
       className={cn(
         "a4-paper transition-transform duration-200",
-        variant === "large" ? "w-[min(86vw,820px)] shadow-2xl shadow-black" : "w-[min(31vw,500px)] min-w-[360px] shadow-2xl shadow-black",
+        variant === "large" ? "w-[clamp(500px,52vw,640px)] shadow-2xl shadow-black" : "w-[min(31vw,500px)] min-w-[360px] shadow-2xl shadow-black",
       )}
       style={{ "--resume-accent": accentColor } as CSSProperties}
     >
       <div
-        className={cn("flex h-full origin-top flex-col p-[6.4%] transition-transform duration-200", scale < 0.9 ? "compress-pulse" : "")}
-        style={{ transform: `scaleY(${scale})`, "--resume-content-scale-y": scale } as CSSProperties}
+        className={cn("flex h-full flex-col p-[6.4%] transition-[filter] duration-200", scale < 0.9 ? "compress-pulse" : "")}
+        style={{ "--resume-density-scale": scale } as CSSProperties}
       >
         {children}
-        <footer data-resume-footer className="mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-2 font-mono text-[8px] tracking-[0.16em] text-slate-400">
+        <footer data-resume-footer className="mt-auto flex items-center justify-between border-t border-slate-200 font-mono tracking-[0.16em] text-slate-400" style={{ ...scaledTextStyle(8, 1.25), gap: scaledRem(0.75), paddingTop: scaledRem(0.5) }}>
           <span className="min-w-0 truncate">
             {exportTargetLabel}: {targetRole}
           </span>
@@ -491,7 +521,7 @@ export function ResumePreview() {
             </button>
           </div>
           <div className="tactical-grid tactical-scrollbar min-h-0 flex-1 overflow-auto px-8 py-8">
-            <div className={cn("mx-auto flex w-full justify-center gap-8", pageCount === 2 ? "flex-col items-center 2xl:flex-row 2xl:items-start" : "items-start")}>
+            <div className={cn("mx-auto flex w-full justify-center gap-8", pageCount === 2 ? "flex-col items-center min-[1800px]:flex-row min-[1800px]:items-start" : "items-start")}>
               <PreviewPaper pageNumber={1} scale={previewScale} variant="large" accentColor={accentColor} targetRole={draft.exportProtocol.targetRole} exportTargetLabel={t("preview.exportTarget")}>
                 <PreviewIdentityHeader draft={draft} t={t} />
                 <PreviewPaperPage blocks={layoutPlan.pages[0] ?? []} />

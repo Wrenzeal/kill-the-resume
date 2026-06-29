@@ -538,3 +538,7 @@
 - 修复右侧简历预览显示不全的问题：`ResumePreview` 不再按整模块塞入页面，而是直接渲染共享 `resume-paper-layout` 产出的 `PaperBlock[]` 分页；同一个长项目/长模块可以跨页显示，避免第一页 `.a4-paper` 裁切导致右侧预览少内容。
 - 新增右侧预览“大屏预览”按钮：打开应用内全屏 A4 预览弹层，支持关闭按钮与 Esc，复用同一份分页/压缩计划，方便检查较小右栏难以看清的版式细节。
 - 新增回归测试覆盖单个项目模块跨页规划，防止后续回退到模块级预览分页；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 修复右侧 A4 预览第一页末尾挤压/重叠的问题：移除预览内容容器的整页 `scaleY()` 二次压缩，改为通过 `--resume-density-scale` 对预览文字、行高、间距、项目缩进、技能标签和页脚做密度感知缩放，避免共享 layout plan 已经缩放后再次压扁内容。
+- 调整大屏预览纸张尺寸：大屏 A4 宽度从过大的视口占比收敛到 `clamp(500px, 52vw, 640px)`，两页默认纵向滚动、超宽屏才并排，减少“纸很大但内容很小、空白很多”的误判。
+- 新增回归测试防止 `ResumePreview` 恢复整页 `scaleY()` 双重压缩；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

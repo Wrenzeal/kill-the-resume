@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { apiClient, buildJobRadarJobsPath, resolveApiBaseUrlForEnvironment } from "@/lib/api";
 import { formatWebsiteDisplay, formatWebsiteHref } from "@/lib/contact-display";
 import { coerceDateRange, formatDateRange, normalizeMonthValue } from "@/lib/date-range";
@@ -460,6 +461,13 @@ test("resume paper layout plan keeps preview and PDF density decisions shared", 
   assert.ok(plan.densityScale >= 0.72 && plan.densityScale <= 1);
   assert.equal(plan.pages.length, plan.pageCount);
   assert.ok(plan.pages.every((page) => page.length > 0));
+});
+
+test("resume preview source does not vertically scale an already compressed paper plan", () => {
+  const source = readFileSync(new URL("../src/components/editor/ResumePreview.tsx", import.meta.url), "utf8");
+
+  assert.equal(source.includes("scaleY("), false);
+  assert.ok(source.includes("--resume-density-scale"));
 });
 
 test("resume paper layout plan can split one module across pages for block-level preview", () => {
