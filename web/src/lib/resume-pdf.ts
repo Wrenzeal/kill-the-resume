@@ -2,6 +2,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { getApiBaseUrl } from "@/lib/api";
 import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
+import { createResumePaperLayoutPlan } from "@/lib/resume-paper-layout";
 import { getOrderedFields } from "@/lib/resume-layout";
 import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectCustomModuleSection, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
 import { hexToRgbTuple } from "@/lib/resume-theme";
@@ -71,8 +72,6 @@ const layout = {
 };
 
 const maxPdfPages = 2;
-const minDensityScale = 0.62;
-const twoPageThreshold = 0.72;
 const previewFontScale = 1.58;
 const ptPerMm = 72 / 25.4;
 
@@ -961,35 +960,6 @@ function paginateBlocks(blocks: PdfBlock[]) {
   return pages.filter((blocksOnPage) => blocksOnPage.length > 0 || pages.length === 1);
 }
 
-function totalBlockHeight(blocks: PdfBlock[]) {
-  return blocks.reduce((sum, block) => sum + block.estimate, 0);
-}
-
-function fitDensityScale(draft: ResumeDraft, t: PdfTranslate) {
-  activeDensityScale = 1;
-  let blocks = buildBlocks(draft, t);
-  const totalHeight = totalBlockHeight(blocks);
-  const tallestBlockHeight = Math.max(0, ...blocks.map((block) => block.estimate));
-  const onePageCapacity = pageSize.contentBottom - (pageSize.top + scaled(layout.headerHeight));
-  const twoPageCapacity = onePageCapacity + (pageSize.contentBottom - pageSize.top);
-  const safeTallestHeight = Math.max(tallestBlockHeight, 1);
-  const safeTotalHeight = Math.max(totalHeight, 1);
-  const onePageScale = Math.min(1, onePageCapacity / safeTotalHeight, onePageCapacity / safeTallestHeight);
-
-  if (onePageScale < 1 && onePageScale >= twoPageThreshold) {
-    activeDensityScale = Math.max(twoPageThreshold, onePageScale);
-    blocks = buildBlocks(draft, t);
-    return blocks;
-  }
-
-  if (onePageScale < twoPageThreshold || totalHeight > twoPageCapacity || tallestBlockHeight > onePageCapacity) {
-    activeDensityScale = Math.max(minDensityScale, Math.min(1, twoPageCapacity / safeTotalHeight, onePageCapacity / safeTallestHeight));
-    blocks = buildBlocks(draft, t);
-  }
-
-  return blocks;
-}
-
 function footer(page: PDFPage, draft: ResumeDraft, t: PdfTranslate, pageNumber: number) {
   drawLine(page, pageSize.marginX, pageSize.footerLineY, pageSize.width - pageSize.marginX, pageSize.footerLineY, theme.light, 0.25);
   textLine(
@@ -1212,7 +1182,9 @@ export async function exportResumePdf(draft: ResumeDraft, filename: string, t: P
     activePdfAccent = hexToRgbTuple(draft.theme?.accentColor ?? "");
     activeFonts = await loadFonts(pdfDoc);
     activeImages = await loadPdfImages(pdfDoc, draft);
-    const blocks = fitDensityScale(draft, t);
+    const layoutPlan = createResumePaperLayoutPlan(draft, t, { language: activePdfLanguage });
+    activeDensityScale = layoutPlan.densityScale;
+    const blocks = buildBlocks(draft, t);
     const pages = paginateBlocks(blocks).slice(0, maxPdfPages);
     const pageCount = Math.max(1, pages.length);
 

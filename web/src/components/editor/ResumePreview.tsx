@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
 import { markdownToPlainText, parseMarkdownBlocks, type MarkdownBlock } from "@/lib/markdown";
 import type { Language, TranslationKey } from "@/lib/i18n";
+import { createResumePaperLayoutPlan } from "@/lib/resume-paper-layout";
 import { getResumeDensity } from "@/lib/resume-metrics";
 import { getModuleDefinition, getOrderedFields, isEditorModule } from "@/lib/resume-layout";
 import { fieldCaption, getResumeModuleItems, isResumeFieldVisible, isResumeMetaField, projectCustomModuleSection, projectIdentityContact, projectResumeItemFieldText, projectSkillSection, type ResumeItem } from "@/lib/resume-projection";
@@ -17,9 +18,6 @@ const densityLabelKeys: Record<ReturnType<typeof getResumeDensity>["level"], Tra
   warning: "density.warning",
   critical: "density.critical",
 };
-
-const twoPageThreshold = 0.72;
-
 
 function previewPlainText(value: string | undefined | null) {
   return markdownToPlainText(value, { preserveBlankLines: true });
@@ -402,8 +400,6 @@ function PreviewPaper({
   children,
   pageNumber,
   scale,
-  registerPaper,
-  registerContent,
   accentColor,
   targetRole,
   exportTargetLabel,
@@ -412,8 +408,6 @@ function PreviewPaper({
   children: ReactNode;
   pageNumber: number;
   scale: number;
-  registerPaper: (element: HTMLElement | null) => void;
-  registerContent: (element: HTMLDivElement | null) => void;
   accentColor: string;
   targetRole: string;
   exportTargetLabel: string;
@@ -421,7 +415,6 @@ function PreviewPaper({
 }) {
   return (
     <article
-      ref={registerPaper}
       data-resume-paper
       className={cn(
         "a4-paper transition-transform duration-200",
@@ -430,7 +423,6 @@ function PreviewPaper({
       style={{ "--resume-accent": accentColor } as CSSProperties}
     >
       <div
-        ref={registerContent}
         className={cn("flex h-full origin-top flex-col p-[6.4%] transition-transform duration-200", scale < 0.9 ? "compress-pulse" : "")}
         style={{ transform: `scaleY(${scale})`, "--resume-content-scale-y": scale } as CSSProperties}
       >
@@ -462,158 +454,31 @@ export function ResumePreview() {
   const draft = useEditorStore((state) => state.draft);
   const accentColor = draft.theme.accentColor;
   const density = useMemo(() => getResumeDensity(draft), [draft]);
-  const paperRefs = useRef<Array<HTMLElement | null>>([]);
-  const contentRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const measurePaperRef = useRef<HTMLElement | null>(null);
-  const measureContentRef = useRef<HTMLDivElement | null>(null);
-  const [fitScale, setFitScale] = useState(1);
-  const [layoutFitScale, setLayoutFitScale] = useState(1);
-  const [measuredPageSplitIndex, setMeasuredPageSplitIndex] = useState<number | null>(null);
-
+  const layoutPlan = useMemo(() => createResumePaperLayoutPlan(draft, t, { language }), [draft, language, t]);
   const visibleModules = draft.layout.modules.filter((module) => module.visible && module.id !== "export");
   const moduleNodes = visibleModules.flatMap((module) => renderVisibleModule(draft, module, t, language));
-  const measurementModuleNodes = visibleModules.flatMap((module) => renderVisibleModule(draft, module, t, language));
-  const shouldUseTwoPages = (layoutFitScale < twoPageThreshold || density.level === "critical") && moduleNodes.length > 1;
-  const pageCount = shouldUseTwoPages ? 2 : 1;
-  const fallbackSplitIndex = Math.ceil(moduleNodes.length / 2);
-  const pageSplitIndex = pageCount === 1 ? moduleNodes.length : Math.min(Math.max(measuredPageSplitIndex ?? fallbackSplitIndex, 1), moduleNodes.length - 1);
-  const pageOneModules = pageCount === 1 ? moduleNodes : moduleNodes.slice(0, pageSplitIndex);
-  const pageTwoModules = pageCount === 1 ? [] : moduleNodes.slice(pageSplitIndex);
-  const previewScale = pageCount === 2 ? Math.max(0.72, Math.min(1, fitScale)) : Math.min(density.compression, fitScale);
-
-  useEffect(() => {
-    if (!previewVisible) return undefined;
-
-    let frame = 0;
-
-    const updateLayoutFitScale = () => {
-      const paper = measurePaperRef.current;
-      const content = measureContentRef.current;
-
-      if (!paper || !content || !paper.clientHeight || !content.scrollHeight) {
-        return;
-      }
-
-      const nextScale = Number(Math.min(1, Math.max(0.42, (paper.clientHeight - 2) / content.scrollHeight)).toFixed(3));
-      setLayoutFitScale((currentScale) => (Math.abs(currentScale - nextScale) > 0.004 ? nextScale : currentScale));
-
-      const moduleElements = Array.from(content.querySelectorAll<HTMLElement>("[data-resume-measure-module]"));
-      if (moduleElements.length > 1) {
-        const header = content.querySelector<HTMLElement>("[data-resume-identity-header]");
-        const footer = content.querySelector<HTMLElement>("[data-resume-footer]");
-        const contentRect = content.getBoundingClientRect();
-        const footerHeight = footer?.getBoundingClientRect().height ?? 0;
-        const headerBottom = header ? header.getBoundingClientRect().bottom - contentRect.top : 0;
-        const usableHeight = Math.max(1, paper.clientHeight - footerHeight - 2);
-        const firstPageModuleCapacity = Math.max(1, usableHeight - headerBottom);
-        let usedHeight = 0;
-        let nextSplitIndex = 1;
-
-        moduleElements.forEach((element, index) => {
-          const rect = element.getBoundingClientRect();
-          const nextHeight = Math.max(0, rect.bottom - rect.top);
-
-          if (index > 0 && usedHeight + nextHeight > firstPageModuleCapacity) {
-            return;
-          }
-
-          usedHeight += nextHeight;
-          nextSplitIndex = index + 1;
-        });
-
-        nextSplitIndex = Math.min(Math.max(nextSplitIndex, 1), moduleElements.length - 1);
-        setMeasuredPageSplitIndex((current) => (current === nextSplitIndex ? current : nextSplitIndex));
-      } else {
-        setMeasuredPageSplitIndex((current) => (current === null ? current : null));
-      }
-    };
-
-    frame = window.requestAnimationFrame(updateLayoutFitScale);
-
-    const resizeObserver = new ResizeObserver(() => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(updateLayoutFitScale);
+  const pageCount = layoutPlan.pageCount;
+  const previewScale = layoutPlan.densityScale;
+  const moduleFirstPage = new Map<string, number>();
+  layoutPlan.pages.forEach((page, pageIndex) => {
+    page.forEach((block) => {
+      const moduleId = typeof block.data?.module === "string" ? block.data.module : "";
+      if (moduleId && !moduleFirstPage.has(moduleId)) moduleFirstPage.set(moduleId, pageIndex);
     });
-
-    if (measurePaperRef.current) resizeObserver.observe(measurePaperRef.current);
-    if (measureContentRef.current) resizeObserver.observe(measureContentRef.current);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
-    };
-  }, [draft, measurementModuleNodes.length, previewVisible]);
-
-  useEffect(() => {
-    if (!previewVisible) return undefined;
-
-    let frame = 0;
-
-    const updateFitScale = () => {
-      const scales = contentRefs.current.map((content, index) => {
-        const paper = paperRefs.current[index];
-
-        if (!paper || !content || !paper.clientHeight || !content.scrollHeight) {
-          return 1;
-        }
-
-        return Math.min(1, Math.max(0.42, (paper.clientHeight - 2) / content.scrollHeight));
-      });
-      const nextScale = Number((scales.length ? Math.min(...scales) : 1).toFixed(3));
-
-      setFitScale((currentScale) => (Math.abs(currentScale - nextScale) > 0.004 ? nextScale : currentScale));
-    };
-
-    frame = window.requestAnimationFrame(updateFitScale);
-
-    const resizeObserver = new ResizeObserver(() => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(updateFitScale);
-    });
-
-    paperRefs.current.forEach((paper) => {
-      if (paper) resizeObserver.observe(paper);
-    });
-    contentRefs.current.forEach((content) => {
-      if (content) resizeObserver.observe(content);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
-    };
-  }, [draft, moduleNodes.length, pageCount, previewVisible]);
+  });
+  const pageOneModules = pageCount === 1 ? moduleNodes : moduleNodes.filter(({ module }) => (moduleFirstPage.get(module) ?? 0) === 0);
+  const pageTwoModules = pageCount === 1 ? [] : moduleNodes.filter(({ module }) => moduleFirstPage.get(module) === 1);
 
   if (!previewVisible) return null;
 
   return (
     <>
-      <div aria-hidden="true" className="pointer-events-none fixed left-[-200vw] top-0 z-[-1] opacity-0">
-        <PreviewPaper
-          pageNumber={1}
-          scale={1}
-          measurement
-          registerPaper={(element) => {
-            measurePaperRef.current = element;
-          }}
-          registerContent={(element) => {
-            measureContentRef.current = element;
-          }}
-          accentColor={accentColor}
-          targetRole={draft.exportProtocol.targetRole}
-          exportTargetLabel={t("preview.exportTarget")}
-        >
-          <PreviewIdentityHeader draft={draft} t={t} />
-          {measurementModuleNodes.map(({ module, node }) => <div key={`measure-${module}`} data-resume-measure-module>{node}</div>)}
-        </PreviewPaper>
-      </div>
-
       <section data-resume-screen-root className="relative z-0 flex h-full w-[clamp(420px,34vw,560px)] shrink-0 flex-col border-l border-[rgba(125,139,153,0.18)] bg-[#070b10]">
       <div data-print-hidden className="flex items-center justify-between gap-4 border-b border-[rgba(125,139,153,0.18)] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.28em] text-slate-500">
         <span>{t("preview.title")}</span>
         <div className="flex items-center gap-3">
           <span className={density.level === "stable" ? "text-[var(--cyber-green)]" : "text-[var(--warning-orange)]"}>
-            {pageCount === 2 ? t("control.twoPages") : t("control.onePage")} · {t(densityLabelKeys[density.level])} · FIT {Math.round(layoutFitScale * 100)}%
+            {pageCount === 2 ? t("control.twoPages") : t("control.onePage")} · {t(densityLabelKeys[density.level])} · FIT {Math.round(layoutPlan.densityScale * 100)}%
           </span>
           <button
             type="button"
@@ -636,12 +501,6 @@ export function ResumePreview() {
           <PreviewPaper
             pageNumber={1}
             scale={previewScale}
-            registerPaper={(element) => {
-              paperRefs.current[0] = element;
-            }}
-            registerContent={(element) => {
-              contentRefs.current[0] = element;
-            }}
             accentColor={accentColor}
             targetRole={draft.exportProtocol.targetRole}
             exportTargetLabel={t("preview.exportTarget")}
@@ -654,12 +513,6 @@ export function ResumePreview() {
             <PreviewPaper
               pageNumber={2}
               scale={previewScale}
-              registerPaper={(element) => {
-                paperRefs.current[1] = element;
-              }}
-              registerContent={(element) => {
-                contentRefs.current[1] = element;
-              }}
               accentColor={accentColor}
               targetRole={draft.exportProtocol.targetRole}
               exportTargetLabel={t("preview.exportTarget")}
@@ -667,7 +520,7 @@ export function ResumePreview() {
               {pageTwoModules.map(({ module, node }) => (
                 <div key={module}>{node}</div>
               ))}
-              {previewScale <= 0.73 ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
+              {layoutPlan.overflowRisk ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
             </PreviewPaper>
           ) : null}
         </div>

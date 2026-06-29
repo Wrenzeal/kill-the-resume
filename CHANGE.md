@@ -529,3 +529,8 @@
 - 修复自定义简历模块在右侧预览和 PDF 导出中缺失的问题：新增共享 `projectCustomModuleSection` 投影，自定义模块标题即使字段暂未填写也会显示，文本、长文本和结构化日期字段在预览/PDF 中保持一致。
 - 优化右侧预览双页拆分页：预览现在用隐藏测量纸张按实际模块高度计算第一页可容纳模块，减少预览长度/分页与 PDF 导出估算不一致的问题。
 - 新增前端回归测试覆盖自定义模块空字段标题投影、可见字段与日期格式投影；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`git diff --check`。
+
+
+- 统一右侧简历预览与 PDF 导出版式规划：新增 `web/src/lib/resume-paper-layout.ts` 作为共享 A4 纸张 metrics、内容块高度估算、压缩比例和分页来源，预览不再依赖 DOM 高度/模块数量切页，PDF 不再使用独立压缩启发式。
+- 修复“预览显示更多页、实际 PDF 只有约一页半”的一致性问题：`ResumePreview` 与 `resume-pdf` 现在消费同一个 layout plan，保持最多两页 A4 的页数、压缩和溢出风险语义一致。
+- 新增回归测试覆盖共享 layout plan 的双页/压缩决策和自定义模块块归属；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

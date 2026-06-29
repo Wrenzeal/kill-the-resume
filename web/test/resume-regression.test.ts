@@ -7,6 +7,7 @@ import { markdownToBulletItems, markdownToPlainText, parseMarkdownBlocks } from 
 import { createDefaultJobRadarCriteria, getFreshnessStatus, searchJobPostings, scoreJobPosting, type JobPosting } from "@/lib/job-radar";
 import { defaultSkillLabels, joinSkillTags, normalizeSkillMatrix, normalizeSkillMatrixForPersistence, skillCategoriesFromFields, splitSkillTags } from "@/lib/skills";
 import { normalizeResumeDraft, normalizeResumeDraftForPersistence } from "@/lib/resume-normalize";
+import { createResumePaperLayoutPlan } from "@/lib/resume-paper-layout";
 import { initialResumeDraft } from "@/lib/resume-defaults";
 import type { ResumeDraft } from "@/types/resume";
 
@@ -433,6 +434,55 @@ test("custom module projection keeps visible text and date fields in layout orde
     ["period", "2025.01 — 2025.03"],
     ["body", "- Built shared preview/PDF projection"],
   ]);
+});
+
+
+
+test("resume paper layout plan keeps preview and PDF density decisions shared", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.projects = Array.from({ length: 4 }, (_, index) => ({
+    ...draft.projects[0]!,
+    id: `project-${index}`,
+    codename: `Project ${index + 1}`,
+    signal: "构建复杂控制台、数据建模、实时预览、导出链路和跨端状态同步。".repeat(4),
+    impact: "将编辑效率、版面稳定性、可维护性和导出一致性全部纳入同一个验证回路。".repeat(4),
+  }));
+  draft.work = Array.from({ length: 3 }, (_, index) => ({
+    ...draft.work[0]!,
+    id: `work-${index}`,
+    bullets: "建立统一布局规划\n减少预览与 PDF 的分页分歧\n保留最多两页 A4 的产品约束".repeat(3),
+  }));
+
+  const t = (key: string) => key;
+  const plan = createResumePaperLayoutPlan(draft, t as never, { language: "zh-CN" });
+
+  assert.equal(plan.pageCount, 2);
+  assert.ok(plan.densityScale >= 0.72 && plan.densityScale <= 1);
+  assert.equal(plan.pages.length, plan.pageCount);
+  assert.ok(plan.pages.every((page) => page.length > 0));
+});
+
+test("resume paper layout plan preserves custom module block ownership", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.customModules = [{
+    id: "custom-awards",
+    title: "Awards",
+    fields: [
+      { id: "title", label: "Title", type: "text", value: "Best Tactical Resume", visible: true },
+      { id: "period", label: "Period", type: "date", value: { start: "2026-01", end: "", isPresent: true }, visible: true },
+    ],
+  }];
+  draft.layout.modules = [
+    { id: "identity", visible: true },
+    { id: "custom-awards", visible: true },
+    { id: "export", visible: false },
+  ];
+
+  const plan = createResumePaperLayoutPlan(draft, ((key: string) => key) as never, { language: "en-US" });
+  const moduleIds = plan.blocks.flatMap((block) => typeof block.data?.module === "string" ? [block.data.module] : []);
+
+  assert.ok(moduleIds.includes("custom-awards"));
+  assert.ok(plan.blocks.some((block) => block.sectionTitle === "Awards"));
 });
 
 test("job radar English mode uses localized default criteria without CJK text", () => {
