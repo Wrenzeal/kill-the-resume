@@ -542,3 +542,7 @@
 - 修复右侧 A4 预览第一页末尾挤压/重叠的问题：移除预览内容容器的整页 `scaleY()` 二次压缩，改为通过 `--resume-density-scale` 对预览文字、行高、间距、项目缩进、技能标签和页脚做密度感知缩放，避免共享 layout plan 已经缩放后再次压扁内容。
 - 调整大屏预览纸张尺寸：大屏 A4 宽度从过大的视口占比收敛到 `clamp(500px, 52vw, 640px)`，两页默认纵向滚动、超宽屏才并排，减少“纸很大但内容很小、空白很多”的误判。
 - 新增回归测试防止 `ResumePreview` 恢复整页 `scaleY()` 双重压缩；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 将右侧简历预览改为连续长页：普通预览不再显示多张 A4 分页纸，而是用一张随内容增长的 `resume-paper-surface` 渲染完整 `layoutPlan.blocks`，避免编辑时被分页高度/裁切干扰。
+- 连续预览新增 PDF 分页参考线：根据共享 `layoutPlan.pages` 在长页中插入虚线提示下一页从哪里开始；大屏预览仍保留分页 A4/PDF 样式，PDF 导出继续使用独立 vector PDF 绘制逻辑，不按右侧连续预览导出。
+- 新增回归测试覆盖“普通预览连续长页 + 大屏预览分页 A4”的源码边界；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

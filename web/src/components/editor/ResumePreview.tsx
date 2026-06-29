@@ -223,18 +223,18 @@ function PreviewBlockSectionTitle({ title }: { title?: string }) {
   );
 }
 
-function PreviewPaperBlock({ block }: { block: PaperBlock }) {
+function PreviewPaperBlock({ block, preserveBlockHeight = true }: { block: PaperBlock; preserveBlockHeight?: boolean }) {
   const data = block.data ?? {};
   const label = typeof data.label === "string" ? data.label : "";
   const line = typeof data.line === "string" ? data.line : "";
   const valueSize = typeof data.valueSize === "number" ? data.valueSize : 7.4;
   const isMeta = Boolean(data.meta || data.date);
   const isBordered = Boolean(data.bordered);
-  const blockStyle = blockHeightStyle(block);
+  const blockStyle = preserveBlockHeight ? blockHeightStyle(block) : undefined;
   const bodyClass = cn(isBordered ? "border-l-2 border-[var(--resume-accent)]" : "");
   const bodyStyle = isBordered ? { paddingLeft: scaledRem(1) } : undefined;
 
-  if (block.kind === "gap") return <div aria-hidden="true" style={blockStyle} />;
+  if (block.kind === "gap") return <div aria-hidden="true" style={blockStyle ?? { height: scaledRem(0.3) }} />;
 
   if (block.kind === "section-title-only") {
     return (
@@ -360,6 +360,73 @@ function PreviewPaperBlock({ block }: { block: PaperBlock }) {
   return null;
 }
 
+function pageBreakIndexes(pages: PaperBlock[][]) {
+  let cursor = 0;
+  const breakIndexes = new Set<number>();
+
+  pages.slice(0, -1).forEach((page) => {
+    cursor += page.length;
+    if (cursor > 0) breakIndexes.add(cursor);
+  });
+
+  return breakIndexes;
+}
+
+function PreviewPageBreakMarker({ pageNumber, t }: { pageNumber: number; t: (key: TranslationKey) => string }) {
+  return (
+    <div data-resume-continuous-page-break className="relative my-5 border-t border-dashed border-[color-mix(in_srgb,var(--resume-accent)_58%,transparent)]">
+      <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 bg-[var(--paper)] px-3 font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-[var(--resume-accent)]">
+        {t("preview.pageBreakGuide")} · PAGE_{pageNumber.toString().padStart(2, "0")} / {t("preview.pageBreakNext")}
+      </div>
+    </div>
+  );
+}
+
+function PreviewContinuousBlocks({ blocks, breaks, t }: { blocks: PaperBlock[]; breaks: Set<number>; t: (key: TranslationKey) => string }) {
+  return (
+    <div className="flex flex-col" data-resume-continuous-blocks>
+      {blocks.map((block, index) => (
+        <div key={`${block.kind}-${index}-${block.sectionTitle ?? ""}-${block.estimate}`}>
+          {breaks.has(index) ? <PreviewPageBreakMarker pageNumber={index === 0 ? 1 : [...breaks].filter((breakIndex) => breakIndex <= index).length + 1} t={t} /> : null}
+          <PreviewPaperBlock block={block} preserveBlockHeight={false} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewContinuousPaper({
+  draft,
+  t,
+  blocks,
+  breaks,
+  scale,
+  accentColor,
+  overflowRisk,
+}: {
+  draft: ResumeDraft;
+  t: (key: TranslationKey) => string;
+  blocks: PaperBlock[];
+  breaks: Set<number>;
+  scale: number;
+  accentColor: string;
+  overflowRisk: boolean;
+}) {
+  return (
+    <article
+      data-resume-continuous-preview
+      className="resume-paper-surface w-[min(31vw,500px)] min-w-[360px] shadow-2xl shadow-black"
+      style={{ "--resume-accent": accentColor } as CSSProperties}
+    >
+      <div className="flex flex-col p-[6.4%]" style={{ "--resume-density-scale": scale } as CSSProperties}>
+        <PreviewIdentityHeader draft={draft} t={t} />
+        <PreviewContinuousBlocks blocks={blocks} breaks={breaks} t={t} />
+        {overflowRisk ? <p className="mt-5 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
+      </div>
+    </article>
+  );
+}
+
 function PreviewPaperPage({ blocks }: { blocks: PaperBlock[] }) {
   return (
     <div className="min-h-0 flex-1">
@@ -425,6 +492,7 @@ export function ResumePreview() {
   const layoutPlan = useMemo(() => createResumePaperLayoutPlan(draft, t, { language }), [draft, language, t]);
   const pageCount = layoutPlan.pageCount;
   const previewScale = layoutPlan.densityScale;
+  const continuousPageBreaks = useMemo(() => pageBreakIndexes(layoutPlan.pages), [layoutPlan.pages]);
 
   useEffect(() => {
     if (!largePreviewOpen) return undefined;
@@ -467,35 +535,18 @@ export function ResumePreview() {
 
       <div
         data-resume-print-stage
-        className={cn(
-          "tactical-grid flex min-h-0 flex-1 justify-center overflow-x-hidden p-5",
-          pageCount === 2 ? "tactical-scrollbar items-start overflow-y-auto" : "items-center overflow-hidden",
-        )}
+        className="tactical-grid tactical-scrollbar flex min-h-0 flex-1 items-start justify-center overflow-y-auto overflow-x-hidden p-5"
       >
-        <div data-resume-print-stack className={cn("flex justify-center gap-6", pageCount === 2 ? "flex-col items-center pb-8" : "items-center")}> 
-          <PreviewPaper
-            pageNumber={1}
+        <div data-resume-print-stack className="flex justify-center pb-8">
+          <PreviewContinuousPaper
+            draft={draft}
+            t={t}
+            blocks={layoutPlan.blocks}
+            breaks={continuousPageBreaks}
             scale={previewScale}
             accentColor={accentColor}
-            targetRole={draft.exportProtocol.targetRole}
-            exportTargetLabel={t("preview.exportTarget")}
-          >
-            <PreviewIdentityHeader draft={draft} t={t} />
-            <PreviewPaperPage blocks={layoutPlan.pages[0] ?? []} />
-          </PreviewPaper>
-
-          {pageCount === 2 ? (
-            <PreviewPaper
-              pageNumber={2}
-              scale={previewScale}
-              accentColor={accentColor}
-              targetRole={draft.exportProtocol.targetRole}
-              exportTargetLabel={t("preview.exportTarget")}
-            >
-              <PreviewPaperPage blocks={layoutPlan.pages[1] ?? []} />
-              {layoutPlan.overflowRisk ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-orange-600">{t("control.overflowRisk")}</p> : null}
-            </PreviewPaper>
-          ) : null}
+            overflowRisk={layoutPlan.overflowRisk}
+          />
         </div>
       </div>
       </section>

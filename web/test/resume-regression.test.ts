@@ -470,6 +470,15 @@ test("resume preview source does not vertically scale an already compressed pape
   assert.ok(source.includes("--resume-density-scale"));
 });
 
+test("resume preview source separates continuous side preview from paged large preview", () => {
+  const source = readFileSync(new URL("../src/components/editor/ResumePreview.tsx", import.meta.url), "utf8");
+
+  assert.ok(source.includes("data-resume-continuous-preview"));
+  assert.ok(source.includes("data-resume-continuous-page-break"));
+  assert.ok(source.includes("blocks={layoutPlan.blocks}"));
+  assert.ok(source.includes("blocks={layoutPlan.pages[0] ?? []}"));
+});
+
 test("resume paper layout plan can split one module across pages for block-level preview", () => {
   const draft = structuredClone(initialResumeDraft) as ResumeDraft;
   draft.projects = Array.from({ length: 7 }, (_, index) => ({

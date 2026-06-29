@@ -216,15 +216,20 @@ textarea {
   animation: scanline 5.5s linear infinite;
 }
 
+.resume-paper-surface,
 .a4-paper {
-  aspect-ratio: 210 / 297;
   background: var(--paper);
   color: #111827;
   font-family: "KTR Paper Sans", "KTR Paper CJK", Arial, Helvetica, sans-serif;
+}
+
+.a4-paper {
+  aspect-ratio: 210 / 297;
   overflow: hidden;
   contain: paint;
 }
 
+.resume-paper-surface .font-mono,
 .a4-paper .font-mono {
   font-family: "KTR Paper Mono", "KTR Paper CJK", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
