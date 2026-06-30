@@ -128,6 +128,25 @@ func (j *JobRadarPreference) BeforeCreate(*gorm.DB) error {
 	return nil
 }
 
+type JobRadarJobState struct {
+	ID           uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID       uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_job_radar_job_states_user_job;index" json:"userId"`
+	JobPostingID uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_job_radar_job_states_user_job;index" json:"jobPostingId"`
+	Status       string     `gorm:"type:varchar(32);not null;default:'new';index" json:"status"`
+	Note         string     `gorm:"type:text;not null;default:''" json:"note"`
+	Priority     int        `gorm:"not null;default:0" json:"priority"`
+	NextActionAt *time.Time `gorm:"index" json:"nextActionAt,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `gorm:"index" json:"updatedAt"`
+}
+
+func (j *JobRadarJobState) BeforeCreate(*gorm.DB) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	return nil
+}
+
 type JobRadarPluginToken struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID     uuid.UUID  `gorm:"type:uuid;not null;index:idx_job_radar_plugin_tokens_user_created" json:"userId"`

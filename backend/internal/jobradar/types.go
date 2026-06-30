@@ -59,32 +59,53 @@ type MatchTag struct {
 	Code  string `json:"code,omitempty"`
 }
 
+type ScoreBreakdown struct {
+	Keyword       int `json:"keyword"`
+	Skill         int `json:"skill"`
+	Location      int `json:"location"`
+	Company       int `json:"company"`
+	TitleBonus    int `json:"titleBonus"`
+	RiskPenalty   int `json:"riskPenalty"`
+	FreshnessRank int `json:"freshnessRank"`
+	Final         int `json:"final"`
+}
+
+type JobState struct {
+	Status       string     `json:"status"`
+	Note         string     `json:"note"`
+	Priority     int        `json:"priority"`
+	NextActionAt *time.Time `json:"nextActionAt,omitempty"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+}
+
 type MatchResult struct {
-	ID               string     `json:"id"`
-	SourceName       string     `json:"sourceName"`
-	SourceJobID      string     `json:"sourceJobId"`
-	SourceURL        string     `json:"sourceUrl"`
-	Title            string     `json:"title"`
-	CompanyName      string     `json:"companyName"`
-	CompanyNature    string     `json:"companyNature"`
-	Location         string     `json:"location"`
-	Salary           string     `json:"salary"`
-	Responsibilities []string   `json:"responsibilities"`
-	Requirements     []string   `json:"requirements"`
-	Description      string     `json:"description"`
-	RawText          string     `json:"rawText,omitempty"`
-	PostedAt         time.Time  `json:"postedAt"`
-	FirstSeenAt      time.Time  `json:"firstSeenAt"`
-	LastSeenAt       time.Time  `json:"lastSeenAt"`
-	FetchedAt        time.Time  `json:"fetchedAt"`
-	ExpiresAt        time.Time  `json:"expiresAt"`
-	MatchPercent     int        `json:"matchPercent"`
-	MatchTags        []MatchTag `json:"matchTags"`
-	WarningTags      []MatchTag `json:"warningTags"`
-	FreshnessStatus  string     `json:"freshnessStatus"`
-	FreshnessLabel   string     `json:"freshnessLabel"`
-	FreshnessRank    int        `json:"freshnessRank"`
-	SortScore        int        `json:"sortScore"`
+	ID               string         `json:"id"`
+	SourceName       string         `json:"sourceName"`
+	SourceJobID      string         `json:"sourceJobId"`
+	SourceURL        string         `json:"sourceUrl"`
+	Title            string         `json:"title"`
+	CompanyName      string         `json:"companyName"`
+	CompanyNature    string         `json:"companyNature"`
+	Location         string         `json:"location"`
+	Salary           string         `json:"salary"`
+	Responsibilities []string       `json:"responsibilities"`
+	Requirements     []string       `json:"requirements"`
+	Description      string         `json:"description"`
+	RawText          string         `json:"rawText,omitempty"`
+	PostedAt         time.Time      `json:"postedAt"`
+	FirstSeenAt      time.Time      `json:"firstSeenAt"`
+	LastSeenAt       time.Time      `json:"lastSeenAt"`
+	FetchedAt        time.Time      `json:"fetchedAt"`
+	ExpiresAt        time.Time      `json:"expiresAt"`
+	MatchPercent     int            `json:"matchPercent"`
+	MatchTags        []MatchTag     `json:"matchTags"`
+	WarningTags      []MatchTag     `json:"warningTags"`
+	FreshnessStatus  string         `json:"freshnessStatus"`
+	FreshnessLabel   string         `json:"freshnessLabel"`
+	FreshnessRank    int            `json:"freshnessRank"`
+	SortScore        int            `json:"sortScore"`
+	ScoreBreakdown   ScoreBreakdown `json:"scoreBreakdown"`
+	State            *JobState      `json:"state,omitempty"`
 }
 
 type SearchMeta struct {
@@ -108,6 +129,13 @@ type SearchResponse struct {
 	Jobs   []MatchResult `json:"jobs"`
 	Policy any           `json:"policy"`
 	Meta   SearchMeta    `json:"meta"`
+}
+
+type StateUpdateInput struct {
+	Status       string
+	Note         string
+	Priority     int
+	NextActionAt *time.Time
 }
 
 type ImportPostingInput struct {

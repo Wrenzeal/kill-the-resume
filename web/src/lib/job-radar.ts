@@ -11,6 +11,27 @@ export interface JobMatchTag {
   code?: JobMatchTagCode;
 }
 
+export interface JobScoreBreakdown {
+  keyword: number;
+  skill: number;
+  location: number;
+  company: number;
+  titleBonus: number;
+  riskPenalty: number;
+  freshnessRank: number;
+  final: number;
+}
+
+export type JobWorkflowStatus = "new" | "saved" | "applying" | "applied" | "archived" | "rejected";
+
+export interface JobWorkflowState {
+  status: JobWorkflowStatus;
+  note: string;
+  priority: number;
+  nextActionAt?: string;
+  updatedAt: string;
+}
+
 export interface JobRadarSearchCriteria {
   keywords: string[];
   locations: string[];
@@ -50,6 +71,8 @@ export interface JobMatchResult extends Omit<JobPosting, "expiresAt"> {
   freshnessLabel: string;
   freshnessRank: number;
   sortScore: number;
+  scoreBreakdown: JobScoreBreakdown;
+  state?: JobWorkflowState;
 }
 
 export const jobFreshnessPolicy = {
@@ -173,6 +196,16 @@ export function scoreJobPosting(job: JobPosting, rawCriteria: Partial<JobRadarSe
   const titleBonus = keywordMatches.some((token) => includesToken(job.title, token)) ? 5 : 0;
   const penalty = Math.min(45, excludeMatches.length * 18);
   const matchPercent = Math.round(clamp(weightedScore + titleBonus - penalty, 0, 100));
+  const scoreBreakdown: JobScoreBreakdown = {
+    keyword: Math.round(ratio(keywordMatches.length, criteria.keywords.length) * 100),
+    skill: Math.round(ratio(skillMatches.length, criteria.requiredSkills.length) * 100),
+    location: locationMatches.length > 0 ? 100 : 0,
+    company: natureMatches.length > 0 ? 100 : 0,
+    titleBonus,
+    riskPenalty: penalty,
+    freshnessRank,
+    final: matchPercent,
+  };
 
   const matchTags = uniqueTags([
     ...keywordMatches.map((token) => createTag("keyword", token)),
@@ -198,6 +231,7 @@ export function scoreJobPosting(job: JobPosting, rawCriteria: Partial<JobRadarSe
     freshnessLabel: freshnessStatus,
     freshnessRank,
     sortScore: matchPercent + freshnessRank * 2,
+    scoreBreakdown,
   };
 }
 

@@ -546,3 +546,7 @@
 - 将右侧简历预览改为连续长页：普通预览不再显示多张 A4 分页纸，而是用一张随内容增长的 `resume-paper-surface` 渲染完整 `layoutPlan.blocks`，避免编辑时被分页高度/裁切干扰。
 - 连续预览新增 PDF 分页参考线：根据共享 `layoutPlan.pages` 在长页中插入虚线提示下一页从哪里开始；大屏预览仍保留分页 A4/PDF 样式，PDF 导出继续使用独立 vector PDF 绘制逻辑，不按右侧连续预览导出。
 - 新增回归测试覆盖“普通预览连续长页 + 大屏预览分页 A4”的源码边界；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 升级机会雷达为可操作的求职工作台：后端新增 `job_radar_job_states` 用户岗位状态表、迁移、可选登录态列表状态附加，以及鉴权 `PUT /api/v1/job-radar/jobs/:id/state`；匹配结果新增 score breakdown，前端队列支持状态筛选和收藏/准备投递/已投递/归档/不合适操作。
+- `/job-radar` 三栏信息架构调整为目标画像、岗位优先级队列、岗位决策面板；插件/导入工具收纳到来源工具区，决策面板展示匹配拆分、推荐理由、风险与缺口，匿名用户仍可看公开 feed，登录后才能保存工作流状态。
+- 新增前后端回归测试覆盖登录态岗位列表 Authorization、岗位状态更新 API、score breakdown final 一致性、服务端状态附加与保存；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`npm run backend:test`、`npm run backend:build`、`git diff --check`。

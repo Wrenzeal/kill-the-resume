@@ -16,6 +16,13 @@ type jobRadarPreferenceRequest struct {
 	Criteria jobradar.SearchCriteria `json:"criteria"`
 }
 
+type jobRadarStateRequest struct {
+	Status       string     `json:"status"`
+	Note         string     `json:"note"`
+	Priority     int        `json:"priority"`
+	NextActionAt *time.Time `json:"nextActionAt"`
+}
+
 type jobRadarImportRequest struct {
 	SourceName       string                  `json:"sourceName"`
 	SourceJobID      string                  `json:"sourceJobId"`
@@ -55,6 +62,7 @@ func (s *Server) listJobRadarJobs(c *gin.Context) {
 	forceRefresh := queryBool(c, "refresh") || queryBool(c, "forceRefresh")
 	response, err := s.jobRadar.SearchWithOptions(c.Request.Context(), criteria, jobradar.SearchOptions{
 		ForceRefresh: forceRefresh,
+		UserID:       s.optionalUserID(c),
 	})
 	if err != nil {
 		if forceRefresh {
@@ -134,6 +142,45 @@ func selectJobRadarImportCriteria(requested jobradar.SearchCriteria, savedPrefer
 		return criteria
 	}
 	return jobradar.NormalizeCriteria(savedPreference)
+}
+
+func (s *Server) updateJobRadarJobState(c *gin.Context) {
+	if s.jobRadar == nil {
+		writeError(c, http.StatusServiceUnavailable, "job radar service unavailable")
+		return
+	}
+	jobID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "job id is invalid")
+		return
+	}
+	var req jobRadarStateRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	state, err := s.jobRadar.SaveJobState(c.Request.Context(), currentUserID(c), jobID, jobradar.StateUpdateInput{
+		Status:       req.Status,
+		Note:         req.Note,
+		Priority:     req.Priority,
+		NextActionAt: req.NextActionAt,
+	})
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "failed to update job radar state")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"state": state})
+}
+
+func (s *Server) optionalUserID(c *gin.Context) uuid.UUID {
+	token, ok := bearerTokenFromHeader(c.GetHeader("Authorization"))
+	if !ok {
+		return uuid.Nil
+	}
+	userID, err := s.auth.Parse(token)
+	if err != nil {
+		return uuid.Nil
+	}
+	return userID
 }
 
 func (s *Server) getJobRadarPreference(c *gin.Context) {

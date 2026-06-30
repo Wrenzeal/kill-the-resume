@@ -206,9 +206,67 @@ func TestImportPostingReturnsScoreEvenBelowMinimumThreshold(t *testing.T) {
 	}
 }
 
+func TestSearchWithOptionsAttachesUserWorkflowState(t *testing.T) {
+	postedAt := time.Now().UTC()
+	job := serviceTestPosting("stateful", "Stateful Backend Engineer", postedAt)
+	userID := uuid.New()
+	nextActionAt := postedAt.Add(24 * time.Hour)
+	repo := &memoryRadarRepo{
+		visible: []models.JobPosting{job},
+		states: map[uuid.UUID]models.JobRadarJobState{
+			job.ID: {
+				UserID:       userID,
+				JobPostingID: job.ID,
+				Status:       "applying",
+				Note:         "tailor resume",
+				Priority:     2,
+				NextActionAt: &nextActionAt,
+				UpdatedAt:    postedAt,
+			},
+		},
+	}
+	service := &Service{repo: repo, maxResults: 20}
+
+	response, err := service.SearchWithOptions(context.Background(), SearchCriteria{Keywords: []string{"Backend"}}, SearchOptions{UserID: userID})
+	if err != nil {
+		t.Fatalf("search should attach state: %v", err)
+	}
+	if len(response.Jobs) != 1 || response.Jobs[0].State == nil {
+		t.Fatalf("expected state on result, got %#v", response.Jobs)
+	}
+	if response.Jobs[0].State.Status != "applying" || response.Jobs[0].State.Note != "tailor resume" || response.Jobs[0].State.Priority != 2 {
+		t.Fatalf("unexpected attached state: %#v", response.Jobs[0].State)
+	}
+}
+
+func TestSaveJobStatePersistsWorkflowState(t *testing.T) {
+	repo := &memoryRadarRepo{}
+	service := &Service{repo: repo, maxResults: 20}
+	userID := uuid.New()
+	jobID := uuid.New()
+	nextActionAt := time.Now().UTC().Add(48 * time.Hour)
+
+	state, err := service.SaveJobState(context.Background(), userID, jobID, StateUpdateInput{
+		Status:       "saved",
+		Note:         "good fit",
+		Priority:     3,
+		NextActionAt: &nextActionAt,
+	})
+	if err != nil {
+		t.Fatalf("save state should succeed: %v", err)
+	}
+	if state.Status != "saved" || state.Note != "good fit" || state.Priority != 3 || state.NextActionAt == nil {
+		t.Fatalf("unexpected state response: %#v", state)
+	}
+	if repo.states[jobID].UserID != userID {
+		t.Fatalf("state was not stored for user/job: %#v", repo.states[jobID])
+	}
+}
+
 type memoryRadarRepo struct {
 	cache          models.JobSearchCache
 	visible        []models.JobPosting
+	states         map[uuid.UUID]models.JobRadarJobState
 	lastNeedsForce bool
 	replaceCalls   int
 	importCalls    int
@@ -284,6 +342,33 @@ func (r *memoryRadarRepo) SavePreference(context.Context, uuid.UUID, SearchCrite
 
 func (r *memoryRadarRepo) GetPreference(context.Context, uuid.UUID) (models.JobRadarPreference, bool, error) {
 	return models.JobRadarPreference{}, false, nil
+}
+
+func (r *memoryRadarRepo) ListStatesForJobs(_ context.Context, _ uuid.UUID, jobIDs []uuid.UUID) (map[uuid.UUID]models.JobRadarJobState, error) {
+	result := make(map[uuid.UUID]models.JobRadarJobState)
+	for _, jobID := range jobIDs {
+		if state, ok := r.states[jobID]; ok {
+			result[jobID] = state
+		}
+	}
+	return result, nil
+}
+
+func (r *memoryRadarRepo) SaveJobState(_ context.Context, userID uuid.UUID, jobID uuid.UUID, input StateUpdateInput) (models.JobRadarJobState, error) {
+	if r.states == nil {
+		r.states = make(map[uuid.UUID]models.JobRadarJobState)
+	}
+	stored := models.JobRadarJobState{
+		UserID:       userID,
+		JobPostingID: jobID,
+		Status:       input.Status,
+		Note:         input.Note,
+		Priority:     input.Priority,
+		NextActionAt: input.NextActionAt,
+		UpdatedAt:    time.Now().UTC(),
+	}
+	r.states[jobID] = stored
+	return stored, nil
 }
 
 type recordingSource struct {

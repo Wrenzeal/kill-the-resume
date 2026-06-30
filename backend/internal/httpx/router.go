@@ -128,6 +128,7 @@ func NewRouter(cfg config.Config, database *gorm.DB) *gin.Engine {
 	authed.Use(server.authMiddleware)
 	authed.GET("/me", server.me)
 	authed.GET("/job-radar/preferences", server.getJobRadarPreference)
+	authed.PUT("/job-radar/jobs/:id/state", server.updateJobRadarJobState)
 	authed.PUT("/job-radar/preferences", server.saveJobRadarPreference)
 	authed.GET("/job-radar/plugin-tokens", server.listJobRadarPluginTokens)
 	authed.POST("/job-radar/plugin-tokens", server.createJobRadarPluginToken)

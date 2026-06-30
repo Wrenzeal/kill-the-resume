@@ -1,5 +1,5 @@
 import type { ResumeDraft } from "@/types/resume";
-import type { JobMatchResult, JobRadarSearchCriteria } from "@/lib/job-radar";
+import type { JobMatchResult, JobRadarSearchCriteria, JobWorkflowState, JobWorkflowStatus } from "@/lib/job-radar";
 
 const explicitApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const fallbackLocalApiBaseUrl = "http://127.0.0.1:19304/api/v1";
@@ -222,8 +222,16 @@ export const apiClient = {
   },
   listJobRadarJobs(criteria: Partial<JobRadarSearchCriteria>, signal?: AbortSignal, options: JobRadarListOptions = {}) {
     return request<JobRadarResponse>(buildJobRadarJobsPath(criteria, options), {
+      token: options.token,
       signal,
       cache: options.refresh ? "no-store" : undefined,
+    });
+  },
+  updateJobRadarJobState(token: string, jobId: string, input: JobRadarStateUpdateInput) {
+    return request<JobRadarStateResponse>(`/job-radar/jobs/${jobId}/state`, {
+      method: "PUT",
+      token,
+      body: input,
     });
   },
 };
@@ -294,8 +302,20 @@ export type JobRadarImportResponse = {
   };
 };
 
+export type JobRadarStateUpdateInput = {
+  status: JobWorkflowStatus;
+  note?: string;
+  priority?: number;
+  nextActionAt?: string | null;
+};
+
+export type JobRadarStateResponse = {
+  state: JobWorkflowState;
+};
+
 export type JobRadarListOptions = {
   refresh?: boolean;
+  token?: string | null;
 };
 
 export function buildJobRadarJobsPath(criteria: Partial<JobRadarSearchCriteria>, options: JobRadarListOptions = {}) {

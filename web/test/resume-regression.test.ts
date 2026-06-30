@@ -224,6 +224,74 @@ test("job radar import API sends authenticated posting payload", async () => {
   }
 });
 
+
+test("job radar authenticated list and state update APIs carry workflow state", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ input: String(input), init: init ?? {} });
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({
+        jobs: [],
+        policy: { hotWithinDays: 7, normalWithinDays: 30, staleWithinDays: 45, deleteAfterDays: 60 },
+        meta: {
+          sourceName: "Remotive",
+          searchFingerprint: "remotive:test",
+          searchQuery: "Backend",
+          cachedCount: 0,
+          expiredCount: 0,
+          expiredDeleted: 0,
+          cacheHit: true,
+          forceRefresh: false,
+          fetchedCount: 0,
+          upsertedCount: 0,
+          linkedCount: 0,
+        },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      state: {
+        status: "applying",
+        note: "prepare tailored resume",
+        priority: 2,
+        nextActionAt: null,
+        updatedAt: "2026-06-30T00:00:00Z",
+      },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await apiClient.listJobRadarJobs({ keywords: ["Backend"] }, undefined, { token: "login-token" });
+    const updated = await apiClient.updateJobRadarJobState("login-token", "job-id", {
+      status: "applying",
+      note: "prepare tailored resume",
+      priority: 2,
+      nextActionAt: null,
+    });
+
+    assert.equal(calls[0].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/jobs?keywords=Backend");
+    assert.equal((calls[0].init.headers as Headers).get("Authorization"), "Bearer login-token");
+    assert.equal(calls[1].input, "https://api.killer.wrenzeal.top/api/v1/job-radar/jobs/job-id/state");
+    assert.equal(calls[1].init.method, "PUT");
+    assert.equal((calls[1].init.headers as Headers).get("Authorization"), "Bearer login-token");
+    assert.deepEqual(JSON.parse(String(calls[1].init.body)), {
+      status: "applying",
+      note: "prepare tailored resume",
+      priority: 2,
+      nextActionAt: null,
+    });
+    assert.equal(updated.state.status, "applying");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("API base URL resolves for local, remote HTTP, and direct HTTPS production API", () => {
   assert.equal(resolveApiBaseUrlForEnvironment({ isBrowser: false }), "https://api.killer.wrenzeal.top/api/v1");
   assert.equal(
@@ -603,6 +671,8 @@ test("job radar filters expired postings, ranks by match percent, and preserves 
   assert.equal(results[0]?.sourceUrl, "https://example.com/jobs/strong");
   assert.equal(results[0]?.freshnessStatus, "hot");
   assert.ok(results[0]!.matchPercent >= 80);
+  assert.equal(results[0]!.scoreBreakdown.final, results[0]!.matchPercent);
+  assert.ok(results[0]!.scoreBreakdown.skill > 0);
   assert.ok(results[0]!.matchTags.some((tag) => tag.kind === "keyword" && tag.label === "React"));
   assert.ok(results[0]!.matchTags.some((tag) => tag.kind === "skill" && tag.label === "TypeScript"));
 });

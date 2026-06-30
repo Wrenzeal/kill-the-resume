@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"kill-the-resume/backend/internal/models"
@@ -313,6 +314,66 @@ func (r *Repository) GetPreference(ctx context.Context, userID uuid.UUID) (model
 		return models.JobRadarPreference{}, false, fmt.Errorf("load job radar preference for user %s: %w", userID, err)
 	}
 	return preference, true, nil
+}
+
+func (r *Repository) ListStatesForJobs(ctx context.Context, userID uuid.UUID, jobIDs []uuid.UUID) (map[uuid.UUID]models.JobRadarJobState, error) {
+	states := map[uuid.UUID]models.JobRadarJobState{}
+	if userID == uuid.Nil || len(jobIDs) == 0 {
+		return states, nil
+	}
+	var stored []models.JobRadarJobState
+	if err := r.db.WithContext(ctx).Where("user_id = ? AND job_posting_id IN ?", userID, jobIDs).Find(&stored).Error; err != nil {
+		return nil, fmt.Errorf("list job radar states for user %s: %w", userID, err)
+	}
+	for _, state := range stored {
+		states[state.JobPostingID] = state
+	}
+	return states, nil
+}
+
+func (r *Repository) SaveJobState(ctx context.Context, userID uuid.UUID, jobID uuid.UUID, input StateUpdateInput) (models.JobRadarJobState, error) {
+	if userID == uuid.Nil {
+		return models.JobRadarJobState{}, fmt.Errorf("job radar state user id is empty")
+	}
+	if jobID == uuid.Nil {
+		return models.JobRadarJobState{}, fmt.Errorf("job radar state job id is empty")
+	}
+	status := normalizeJobStateStatus(input.Status)
+	now := time.Now().UTC()
+	state := models.JobRadarJobState{
+		UserID:       userID,
+		JobPostingID: jobID,
+		Status:       status,
+		Note:         strings.TrimSpace(input.Note),
+		Priority:     max(0, min(5, input.Priority)),
+		NextActionAt: input.NextActionAt,
+	}
+	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "job_posting_id"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"status":         state.Status,
+			"note":           state.Note,
+			"priority":       state.Priority,
+			"next_action_at": state.NextActionAt,
+			"updated_at":     now,
+		}),
+	}).Create(&state).Error; err != nil {
+		return models.JobRadarJobState{}, fmt.Errorf("save job radar state for user %s job %s: %w", userID, jobID, err)
+	}
+	var stored models.JobRadarJobState
+	if err := r.db.WithContext(ctx).Where("user_id = ? AND job_posting_id = ?", userID, jobID).First(&stored).Error; err != nil {
+		return models.JobRadarJobState{}, fmt.Errorf("load job radar state for user %s job %s: %w", userID, jobID, err)
+	}
+	return stored, nil
+}
+
+func normalizeJobStateStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "saved", "applying", "applied", "archived", "rejected":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "new"
+	}
 }
 
 func (r *Repository) ExpiredCountForScope(ctx context.Context, scope SearchScope, now time.Time) (int64, error) {

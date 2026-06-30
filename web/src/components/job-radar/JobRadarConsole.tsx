@@ -15,6 +15,7 @@ import {
   type JobMatchTag,
   type JobMatchResult,
   type JobRadarSearchCriteria,
+  type JobWorkflowStatus,
 } from "@/lib/job-radar";
 import { useCloudStore } from "@/store/cloud-store";
 
@@ -96,6 +97,26 @@ const tagTone: Record<JobMatchTag["kind"], string> = {
   company: "border-[rgba(250,204,21,0.34)] bg-[rgba(250,204,21,0.08)] text-yellow-300",
   risk: "border-[rgba(248,113,113,0.42)] bg-[rgba(248,113,113,0.09)] text-red-300",
   gap: "border-[rgba(255,138,61,0.34)] bg-[rgba(255,138,61,0.08)] text-[var(--warning-orange)]",
+};
+
+const workflowStatuses: JobWorkflowStatus[] = ["new", "saved", "applying", "applied", "archived", "rejected"];
+
+const workflowStatusKeys: Record<JobWorkflowStatus, TranslationKey> = {
+  new: "radar.statusNew",
+  saved: "radar.statusSaved",
+  applying: "radar.statusApplying",
+  applied: "radar.statusApplied",
+  archived: "radar.statusArchived",
+  rejected: "radar.statusRejected",
+};
+
+const workflowTone: Record<JobWorkflowStatus, string> = {
+  new: "border-slate-700 text-slate-400",
+  saved: "border-[rgba(57,255,136,0.42)] text-[var(--cyber-green)]",
+  applying: "border-[rgba(88,230,255,0.42)] text-[var(--trace-cyan)]",
+  applied: "border-indigo-400/40 text-indigo-300",
+  archived: "border-slate-600 text-slate-500",
+  rejected: "border-red-400/35 text-red-300",
 };
 
 function optionalTime(value: string | undefined, fallback: string, language: string) {
@@ -258,7 +279,7 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
             }
           });
       }
-      apiClient.listJobRadarJobs(criteria, controller.signal, { refresh: forceRefresh })
+      apiClient.listJobRadarJobs(criteria, controller.signal, { refresh: forceRefresh, token })
         .then((response) => {
           setFeed(response);
           setFeedError(response.meta.syncError ?? "");
@@ -283,8 +304,10 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
     };
   }, [criteria, preferenceReady, refreshNonce, token]);
 
-  const results = feed?.jobs ?? [];
+  const allResults = useMemo(() => feed?.jobs ?? [], [feed]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [statusFilter, setStatusFilter] = useState<JobWorkflowStatus | "all">("all");
+  const results = useMemo(() => allResults.filter((job) => statusFilter === "all" || (job.state?.status ?? "new") === statusFilter), [allResults, statusFilter]);
   const selected = results.find((job) => job.id === selectedId) ?? results[0];
   const signalCount = feed?.meta.cachedCount ?? 0;
   const expiredCount = feed?.meta.expiredCount ?? 0;
@@ -479,6 +502,30 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
     }
   };
 
+  const updateJobState = async (job: JobMatchResult, status: JobWorkflowStatus) => {
+    if (!token) {
+      setFeedError(t("radar.stateLoginRequired"));
+      return;
+    }
+    try {
+      const response = await apiClient.updateJobRadarJobState(token, job.id, {
+        status,
+        note: job.state?.note ?? "",
+        priority: job.state?.priority ?? 0,
+        nextActionAt: job.state?.nextActionAt ?? null,
+      });
+      setFeed((current) => current ? {
+        ...current,
+        jobs: current.jobs.map((item) => item.id === job.id ? { ...item, state: response.state } : item),
+      } : current);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearAuth();
+      }
+      setFeedError(error instanceof Error ? error.message : t("radar.stateUpdateError"));
+    }
+  };
+
   return (
     <main className="tactical-grid min-h-screen text-slate-100">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-5 py-5 lg:px-6">
@@ -507,8 +554,9 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
           </div>
         </header>
 
-        <section className="tactical-panel border-[rgba(88,230,255,0.22)] bg-[rgba(2,6,23,0.38)] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <details className="tactical-panel border-[rgba(88,230,255,0.22)] bg-[rgba(2,6,23,0.38)] p-4">
+          <summary className="cursor-pointer list-none font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">{t("radar.sourceTools")}</summary>
+          <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--trace-cyan)]">browser_extension_token</p>
               <h2 className="mt-1 font-mono text-xl font-black uppercase tracking-[-0.04em] text-white">{t("radar.pluginTokenTitle")}</h2>
@@ -575,11 +623,11 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
             )}
           </div>
           {visiblePluginTokenStatus ? <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">{visiblePluginTokenStatus}</p> : null}
-        </section>
+        </details>
 
         <section className="grid gap-4 xl:grid-cols-[340px_minmax(460px,1fr)_390px]">
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">
-            <PanelTitle eyebrow="manual_signal_input" title={t("radar.searchTitle")} />
+            <PanelTitle eyebrow="target_profile" title={t("radar.targetProfile")} />
             <div className="mt-4 space-y-4">
               <RadarTextarea label={t("radar.keywords")} value={form.keywords} onChange={updateField("keywords")} placeholder={t("radar.placeholderKeywords")} />
               <RadarTextarea label={t("radar.locations")} value={form.locations} onChange={updateField("locations")} placeholder={t("radar.placeholderLocations")} rows={2} />
@@ -632,19 +680,29 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
 
           <section className="tactical-panel min-h-[680px] p-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <PanelTitle eyebrow="ranked_opportunity_feed" title={t("radar.matchesTitle")} />
+              <PanelTitle eyebrow="priority_queue" title={t("radar.priorityQueue")} />
               <p className="font-mono text-[12px] uppercase tracking-[0.22em] text-slate-500">{t("radar.sortHint")}</p>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StatusFilterButton active={statusFilter === "all"} label={t("radar.statusAll")} onClick={() => setStatusFilter("all")} />
+              {workflowStatuses.map((status) => (
+                <StatusFilterButton key={status} active={statusFilter === status} label={t(workflowStatusKeys[status])} onClick={() => setStatusFilter(status)} />
+              ))}
             </div>
             <TagLegend />
 
             <div className="tactical-scrollbar mt-4 max-h-[calc(100vh-190px)] min-h-[560px] space-y-3 overflow-y-auto pr-2">
               {results.length ? results.map((job) => (
-                <JobCard key={job.id} job={job} selected={job.id === selected?.id} onSelect={() => setSelectedId(job.id)} />
+                <JobCard key={job.id} job={job} selected={job.id === selected?.id} onSelect={() => setSelectedId(job.id)} onStateChange={(status) => updateJobState(job, status)} canUpdateState={Boolean(token)} />
               )) : (
                 <div className="flex min-h-[420px] items-center justify-center border border-dashed border-slate-700 text-center">
                   <div>
                     <p className="font-mono text-[13px] uppercase tracking-[0.3em] text-slate-500">no_signal</p>
                     <p className="mt-3 text-sm text-slate-400">{t("radar.noSignal")}</p>
+                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                      <button className="border border-[rgba(88,230,255,0.35)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--trace-cyan)]" onClick={refreshSource} type="button">{t("radar.refreshSource")}</button>
+                      <button className="border border-[rgba(57,255,136,0.42)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--cyber-green)]" onClick={openImportDialog} type="button">{t("radar.importJob")}</button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -652,8 +710,8 @@ function JobRadarConsoleContent({ clearAuth, language, token, userEmail }: { cle
           </section>
 
           <aside className="tactical-panel h-fit p-4 xl:sticky xl:top-5">
-            <PanelTitle eyebrow="source_trace_detail" title={t("radar.detailTitle")} />
-            {selected ? <JobDetail job={selected} language={language} /> : (
+            <PanelTitle eyebrow="decision_panel" title={t("radar.decisionPanel")} />
+            {selected ? <JobDetail job={selected} language={language} onStateChange={(status) => updateJobState(selected, status)} canUpdateState={Boolean(token)} /> : (
               <p className="mt-8 text-sm leading-7 text-slate-500">{t("radar.emptyDetail")}</p>
             )}
           </aside>
@@ -780,8 +838,63 @@ function MetricBox({ label, value, tone = "default" }: { label: string; value: n
   );
 }
 
-function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: boolean; onSelect: () => void }) {
+function StatusFilterButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button className={cn(
+      "border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition",
+      active ? "border-[rgba(57,255,136,0.5)] bg-[rgba(57,255,136,0.08)] text-[var(--cyber-green)]" : "border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300",
+    )} onClick={onClick} type="button">
+      {label}
+    </button>
+  );
+}
+
+function WorkflowBadge({ status }: { status: JobWorkflowStatus }) {
   const { t } = useI18n();
+  return (
+    <span className={cn("inline-flex border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]", workflowTone[status])}>
+      {t(workflowStatusKeys[status])}
+    </span>
+  );
+}
+
+function StatusActions({ currentStatus, canUpdateState, onStateChange }: {
+  currentStatus: JobWorkflowStatus;
+  canUpdateState: boolean;
+  onStateChange: (status: JobWorkflowStatus) => void;
+}) {
+  const { t } = useI18n();
+  const actions: Array<{ status: JobWorkflowStatus; label: TranslationKey }> = [
+    { status: "saved", label: "radar.saveJob" },
+    { status: "applying", label: "radar.markApplying" },
+    { status: "applied", label: "radar.markApplied" },
+    { status: "archived", label: "radar.archiveJob" },
+    { status: "rejected", label: "radar.rejectJob" },
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {actions.map((action) => (
+        <button className={cn(
+          "border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-45",
+          currentStatus === action.status ? workflowTone[action.status] : "border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300",
+        )} disabled={!canUpdateState || currentStatus === action.status} key={action.status} onClick={() => onStateChange(action.status)} type="button">
+          {t(action.label)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function JobCard({ job, selected, onSelect, onStateChange, canUpdateState }: {
+  job: JobMatchResult;
+  selected: boolean;
+  onSelect: () => void;
+  onStateChange: (status: JobWorkflowStatus) => void;
+  canUpdateState: boolean;
+}) {
+  const { t } = useI18n();
+  const currentStatus = job.state?.status ?? "new";
 
   return (
     <article className={cn(
@@ -794,6 +907,7 @@ function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: b
             {job.title}
           </a>
           <p className="mt-2 text-sm text-slate-400">{job.companyName} · {job.location} · {job.salary}</p>
+          <div className="mt-3"><WorkflowBadge status={currentStatus} /></div>
         </div>
         <div className="shrink-0 text-right font-mono">
           <div className="text-3xl font-black text-[var(--cyber-green)]">{job.matchPercent}%</div>
@@ -804,6 +918,11 @@ function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: b
       <div className="mt-4 flex flex-wrap gap-2">
         {job.matchTags.slice(0, 8).map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
         {job.warningTags.slice(0, 4).map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
+      </div>
+
+      <div className="mt-4 border-t border-slate-900 pt-3">
+        <StatusActions canUpdateState={canUpdateState} currentStatus={currentStatus} onStateChange={onStateChange} />
+        {!canUpdateState ? <p className="mt-2 text-[11px] text-slate-600">{t("radar.stateLoginRequired")}</p> : null}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3">
@@ -821,8 +940,14 @@ function JobCard({ job, selected, onSelect }: { job: JobMatchResult; selected: b
   );
 }
 
-function JobDetail({ job, language }: { job: JobMatchResult; language: string }) {
+function JobDetail({ job, language, onStateChange, canUpdateState }: {
+  job: JobMatchResult;
+  language: string;
+  onStateChange: (status: JobWorkflowStatus) => void;
+  canUpdateState: boolean;
+}) {
   const { t } = useI18n();
+  const currentStatus = job.state?.status ?? "new";
 
   return (
     <div className="mt-4 space-y-5">
@@ -834,7 +959,13 @@ function JobDetail({ job, language }: { job: JobMatchResult; language: string })
             </a>
             <p className="mt-2 text-sm leading-6 text-slate-400">{job.companyName} · {job.companyNature}</p>
           </div>
-          <div className="font-mono text-3xl font-black text-[var(--cyber-green)]">{job.matchPercent}%</div>
+          <div className="shrink-0 text-right">
+            <div className="font-mono text-3xl font-black text-[var(--cyber-green)]">{job.matchPercent}%</div>
+            <div className="mt-2"><WorkflowBadge status={currentStatus} /></div>
+          </div>
+        </div>
+        <div className="mt-4">
+          <StatusActions canUpdateState={canUpdateState} currentStatus={currentStatus} onStateChange={onStateChange} />
         </div>
         <a className="mt-4 inline-flex border border-[rgba(57,255,136,0.42)] px-4 py-2 font-mono text-[12px] uppercase tracking-[0.2em] text-[var(--cyber-green)] transition hover:bg-[rgba(57,255,136,0.08)]" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
           {t("radar.openSource")} ↗
@@ -848,11 +979,19 @@ function JobDetail({ job, language }: { job: JobMatchResult; language: string })
         <InfoBox label={t("radar.expiresMeta")} value={formatDate(job.expiresAt, language)} />
       </div>
 
+      <ScoreBreakdownPanel job={job} />
+
       <section>
-        <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">{t("radar.tagsTitle")}</h3>
+        <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">{t("radar.whyRecommended")}</h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          {job.matchTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
-          {job.warningTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />)}
+          {job.matchTags.length ? job.matchTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />) : <span className="text-sm text-slate-500">{t("radar.noSignal")}</span>}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--warning-orange)]">{t("radar.riskAndGaps")}</h3>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {job.warningTags.length ? job.warningTags.map((tag) => <Tag key={tagKey(tag)} tag={tag} />) : <span className="text-sm text-slate-500">OK</span>}
         </div>
       </section>
 
@@ -864,6 +1003,38 @@ function JobDetail({ job, language }: { job: JobMatchResult; language: string })
         <p className="mt-2 break-all text-[12px] leading-6 text-slate-500">{job.sourceName} / {job.sourceJobId}</p>
       </section>
     </div>
+  );
+}
+
+function ScoreBreakdownPanel({ job }: { job: JobMatchResult }) {
+  const { t } = useI18n();
+  const items = [
+    { label: t("radar.breakdownKeyword"), value: job.scoreBreakdown.keyword },
+    { label: t("radar.breakdownSkill"), value: job.scoreBreakdown.skill },
+    { label: t("radar.breakdownLocation"), value: job.scoreBreakdown.location },
+    { label: t("radar.breakdownCompany"), value: job.scoreBreakdown.company },
+  ];
+
+  return (
+    <section className="border border-slate-800 bg-slate-950/45 p-3">
+      <h3 className="font-mono text-[12px] uppercase tracking-[0.24em] text-[var(--trace-cyan)]">{t("radar.scoreBreakdown")}</h3>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {items.map((item) => (
+          <div className="border border-slate-800 px-2 py-2" key={item.label}>
+            <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              <span>{item.label}</span>
+              <span className="text-slate-300">{item.value}%</span>
+            </div>
+            <div className="mt-2 h-1 bg-slate-900">
+              <div className="h-full bg-[var(--cyber-green)]" style={{ width: `${Math.max(0, Math.min(100, item.value))}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+        {t("radar.breakdownBonusPenalty")}: +{job.scoreBreakdown.titleBonus} / -{job.scoreBreakdown.riskPenalty} · final {job.scoreBreakdown.final}%
+      </p>
+    </section>
   );
 }
 

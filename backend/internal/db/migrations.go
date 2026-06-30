@@ -94,6 +94,22 @@ var appMigrations = []appMigration{
 			`).Error
 		},
 	},
+	{
+		version:     "2026063001",
+		description: "add user job radar workflow states",
+		run: func(tx *gorm.DB) error {
+			return tx.Exec(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_job_radar_job_states_user_job
+				ON job_radar_job_states (user_id, job_posting_id);
+
+				CREATE INDEX IF NOT EXISTS idx_job_radar_job_states_status
+				ON job_radar_job_states (user_id, status, updated_at DESC);
+
+				CREATE INDEX IF NOT EXISTS idx_job_radar_job_states_next_action
+				ON job_radar_job_states (user_id, next_action_at);
+			`).Error
+		},
+	},
 }
 
 func runMigrations(database *gorm.DB) error {

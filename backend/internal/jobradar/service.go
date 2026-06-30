@@ -34,6 +34,8 @@ type radarRepository interface {
 	CleanupExpired(ctx context.Context, now time.Time) (int64, error)
 	SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (models.JobRadarPreference, error)
 	GetPreference(ctx context.Context, userID uuid.UUID) (models.JobRadarPreference, bool, error)
+	ListStatesForJobs(ctx context.Context, userID uuid.UUID, jobIDs []uuid.UUID) (map[uuid.UUID]models.JobRadarJobState, error)
+	SaveJobState(ctx context.Context, userID uuid.UUID, jobID uuid.UUID, input StateUpdateInput) (models.JobRadarJobState, error)
 }
 
 type ServiceConfig struct {
@@ -44,6 +46,7 @@ type ServiceConfig struct {
 
 type SearchOptions struct {
 	ForceRefresh bool
+	UserID       uuid.UUID
 }
 
 type Preference struct {
@@ -150,8 +153,15 @@ func (s *Service) SearchWithOptions(ctx context.Context, criteria SearchCriteria
 		return SearchResponse{}, fmt.Errorf("list cached jobs for search: %w", err)
 	}
 
+	results := SearchPostings(jobs, scope.Criteria, now, s.maxResults)
+	if options.UserID != uuid.Nil {
+		if err := s.attachStates(ctx, options.UserID, results); err != nil {
+			return SearchResponse{}, err
+		}
+	}
+
 	return SearchResponse{
-		Jobs:   SearchPostings(jobs, scope.Criteria, now, s.maxResults),
+		Jobs:   results,
 		Policy: FreshnessPolicy,
 		Meta:   meta,
 	}, nil
@@ -182,6 +192,42 @@ func (s *Service) ImportPosting(ctx context.Context, input ImportPostingInput) (
 			ImportedAt:        now,
 		},
 	}, nil
+}
+
+func (s *Service) SaveJobState(ctx context.Context, userID uuid.UUID, jobID uuid.UUID, input StateUpdateInput) (JobState, error) {
+	if s == nil || s.repo == nil {
+		return JobState{}, fmt.Errorf("job radar service is unavailable")
+	}
+	stored, err := s.repo.SaveJobState(ctx, userID, jobID, input)
+	if err != nil {
+		return JobState{}, err
+	}
+	return stateFromModel(stored), nil
+}
+
+func (s *Service) attachStates(ctx context.Context, userID uuid.UUID, results []MatchResult) error {
+	jobIDs := make([]uuid.UUID, 0, len(results))
+	for _, result := range results {
+		jobID, err := uuid.Parse(result.ID)
+		if err == nil {
+			jobIDs = append(jobIDs, jobID)
+		}
+	}
+	states, err := s.repo.ListStatesForJobs(ctx, userID, jobIDs)
+	if err != nil {
+		return fmt.Errorf("load job radar states: %w", err)
+	}
+	for index := range results {
+		jobID, err := uuid.Parse(results[index].ID)
+		if err != nil {
+			continue
+		}
+		if state, ok := states[jobID]; ok {
+			publicState := stateFromModel(state)
+			results[index].State = &publicState
+		}
+	}
+	return nil
 }
 
 func (s *Service) SavePreference(ctx context.Context, userID uuid.UUID, criteria SearchCriteria) (Preference, error) {
@@ -344,6 +390,16 @@ func truncateImportText(value string, maxRunes int) string {
 		return value
 	}
 	return string(runes[:maxRunes])
+}
+
+func stateFromModel(stored models.JobRadarJobState) JobState {
+	return JobState{
+		Status:       stored.Status,
+		Note:         stored.Note,
+		Priority:     stored.Priority,
+		NextActionAt: stored.NextActionAt,
+		UpdatedAt:    stored.UpdatedAt,
+	}
 }
 
 func preferenceFromModel(stored models.JobRadarPreference) (Preference, error) {

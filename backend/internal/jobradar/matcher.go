@@ -104,15 +104,19 @@ func ScorePosting(job models.JobPosting, rawCriteria SearchCriteria, now time.Ti
 	natureMatches := collectMatches(criteria.CompanyNatures, strings.Join([]string{job.CompanyNature, job.CompanyName, job.Description}, "\n"))
 	excludeMatches := collectMatches(criteria.ExcludeKeywords, riskText)
 
+	keywordRatio := ratio(len(keywordMatches), len(criteria.Keywords))
+	skillRatio := ratio(len(skillMatches), len(criteria.RequiredSkills))
+	locationRatio := boolRatio(len(locationMatches) > 0)
+	companyRatio := boolRatio(len(natureMatches) > 0)
 	activeBuckets := []struct {
 		weight int
 		active bool
 		ratio  float64
 	}{
-		{weight: 38, active: len(criteria.Keywords) > 0, ratio: ratio(len(keywordMatches), len(criteria.Keywords))},
-		{weight: 32, active: len(criteria.RequiredSkills) > 0, ratio: ratio(len(skillMatches), len(criteria.RequiredSkills))},
-		{weight: 16, active: len(criteria.Locations) > 0, ratio: boolRatio(len(locationMatches) > 0)},
-		{weight: 14, active: len(criteria.CompanyNatures) > 0, ratio: boolRatio(len(natureMatches) > 0)},
+		{weight: 38, active: len(criteria.Keywords) > 0, ratio: keywordRatio},
+		{weight: 32, active: len(criteria.RequiredSkills) > 0, ratio: skillRatio},
+		{weight: 16, active: len(criteria.Locations) > 0, ratio: locationRatio},
+		{weight: 14, active: len(criteria.CompanyNatures) > 0, ratio: companyRatio},
 	}
 	activeWeight := 0
 	weighted := 0.0
@@ -155,6 +159,17 @@ func ScorePosting(job models.JobPosting, rawCriteria SearchCriteria, now time.Ti
 	}
 	warningTags = uniqueTags(warningTags)
 
+	breakdown := ScoreBreakdown{
+		Keyword:       int(keywordRatio*100 + 0.5),
+		Skill:         int(skillRatio*100 + 0.5),
+		Location:      int(locationRatio*100 + 0.5),
+		Company:       int(companyRatio*100 + 0.5),
+		TitleBonus:    titleBonus,
+		RiskPenalty:   penalty,
+		FreshnessRank: freshnessRank,
+		Final:         matchPercent,
+	}
+
 	return MatchResult{
 		ID:               job.ID.String(),
 		SourceName:       job.SourceName,
@@ -181,6 +196,7 @@ func ScorePosting(job models.JobPosting, rawCriteria SearchCriteria, now time.Ti
 		FreshnessLabel:   freshnessStatus,
 		FreshnessRank:    freshnessRank,
 		SortScore:        matchPercent + freshnessRank*2,
+		ScoreBreakdown:   breakdown,
 	}
 }
 
