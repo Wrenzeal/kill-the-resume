@@ -8,6 +8,7 @@ import type { EditorModule, ResumeDraft } from "@/types/resume";
 
 export type PaperBlockKind =
   | "summary-line"
+  | "highlight-line"
   | "header-field-line"
   | "label-value-line"
   | "markdown-label"
@@ -187,6 +188,21 @@ function addFlowBlock(blocks: PaperBlock[], kind: PaperBlockKind, estimate: numb
 
 function addGapBlock(blocks: PaperBlock[], gap: number) {
   addFlowBlock(blocks, "gap", activeScale * gap, undefined, { gap });
+}
+
+function addHighlightBlocks(blocks: PaperBlock[], draft: ResumeDraft, t: PaperTranslate) {
+  if (!isResumeFieldVisible(draft, "identity", "highlights")) return;
+  const highlights = normalizePaperText(draft.identity.highlights).split(/\r?\n/).map((line) => paperSafeText(line)).filter(Boolean);
+  if (!highlights.length) return;
+
+  highlights.slice(0, 5).forEach((highlight, index) => {
+    const lines = paperWrapped(highlight, 171, 7.2, "bold", "sans", activeScale);
+    const lh = paperLineHeight(7.2, activeScale, 1.3);
+    lines.forEach((line, lineIndex) => {
+      const isLastLine = lineIndex === lines.length - 1;
+      addFlowBlock(blocks, "highlight-line", lh + (isLastLine ? activeScale * 1.15 : 0), index === 0 && lineIndex === 0 ? t("preview.highlights") : undefined, { module: "identity", line, highlightIndex: index, lineIndex });
+    });
+  });
 }
 
 function addSummaryBlocks(blocks: PaperBlock[], draft: ResumeDraft, t: PaperTranslate) {
@@ -421,7 +437,10 @@ export function buildResumePaperBlocks(draft: ResumeDraft, t: PaperTranslate, op
       continue;
     }
 
-    if (moduleLayout.id === "identity") addSummaryBlocks(blocks, draft, t);
+    if (moduleLayout.id === "identity") {
+      addHighlightBlocks(blocks, draft, t);
+      addSummaryBlocks(blocks, draft, t);
+    }
     if (moduleLayout.id === "projects") addRepeatableBlocks(blocks, draft, "projects", t("preview.projectExperience"), t, true);
     if (moduleLayout.id === "work") addRepeatableBlocks(blocks, draft, "work", t("preview.workHistory"), t, true);
     if (moduleLayout.id === "skills") addSkillsBlock(blocks, draft, t);

@@ -8,17 +8,17 @@ export const defaultSkillDisplayMode: SkillDisplayMode = "markdown";
 export const defaultSkillColumnMode: SkillColumnMode = "two";
 
 export const defaultSkillLabels: Record<BuiltInSkillId, string> = {
-  languages: "语言",
-  frontend: "前端系统",
-  backend: "后端/数据",
-  tools: "工具链",
+  languages: "Production",
+  frontend: "Frontend Systems",
+  backend: "Backend/Data",
+  tools: "Engineering Signals",
 };
 
 export const defaultSkillMatrix: SkillMatrix = {
-  languages: "TypeScript, JavaScript, Go, SQL",
-  frontend: "Next.js, React, Tailwind CSS, Zustand, Design Systems",
-  backend: "Hertz/Gin, PostgreSQL, GORM, REST, Auth",
-  tools: "Vite, Turbopack, Playwright, ESLint, GitHub Actions",
+  languages: "TypeScript / Go / SQL / JavaScript",
+  frontend: "React / Next.js / Tailwind CSS / Zustand / Design Systems",
+  backend: "Gin / PostgreSQL / GORM / JWT Auth / REST APIs",
+  tools: "Vector PDF export / Browser extension import / PM2 deploy / Regression tests / API hardening",
   labels: { ...defaultSkillLabels },
   customCategories: [],
   displayMode: defaultSkillDisplayMode,

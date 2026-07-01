@@ -253,6 +253,18 @@ function PreviewPaperBlock({ block, preserveBlockHeight = true }: { block: Paper
     );
   }
 
+  if (block.kind === "highlight-line") {
+    return (
+      <section style={blockStyle}>
+        <PreviewBlockSectionTitle title={block.sectionTitle} />
+        <div className="flex items-start border border-slate-200 bg-slate-50/80" style={{ gap: scaledRem(0.5), padding: `${scaledRem(0.28)} ${scaledRem(0.45)}` }}>
+          <span className="mt-[0.2em] h-[0.45em] w-[0.45em] shrink-0 bg-[var(--resume-accent)]" />
+          <p className="font-semibold text-slate-900" style={scaledTextStyle(10, 1.25)}>{line}</p>
+        </div>
+      </section>
+    );
+  }
+
   if (block.kind === "header-field-line") {
     return (
       <section style={blockStyle}>

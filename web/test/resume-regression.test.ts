@@ -507,6 +507,34 @@ test("custom module projection keeps visible text and date fields in layout orde
 
 
 
+
+test("developer dossier highlights normalize and render as dedicated paper blocks", () => {
+  const draft = structuredClone(initialResumeDraft) as ResumeDraft;
+  draft.identity.highlights = "定位：Full-stack Engineer\n代表成果：构建矢量 PDF 导出链路";
+
+  const normalized = normalizeResumeDraft({
+    ...draft,
+    identity: { ...draft.identity, highlights: undefined as never },
+  });
+  assert.equal(normalized.identity.highlights, "");
+
+  const plan = createResumePaperLayoutPlan(draft, ((key: string) => key) as never, { language: "zh-CN" });
+  const highlightBlocks = plan.blocks.filter((block) => block.kind === "highlight-line");
+
+  assert.equal(highlightBlocks.length, 2);
+  assert.equal(highlightBlocks[0]?.sectionTitle, "preview.highlights");
+  assert.equal(highlightBlocks[0]?.data?.line, "定位:Full-stack Engineer");
+});
+
+test("default resume copy uses evidence-first project and skill signals", () => {
+  assert.ok(initialResumeDraft.identity.highlights.includes("代表成果"));
+  assert.ok(initialResumeDraft.projects[0]!.signal.includes("Problem:"));
+  assert.ok(initialResumeDraft.projects[0]!.signal.includes("Decision:"));
+  assert.ok(initialResumeDraft.projects[0]!.impact.includes("Impact:"));
+  assert.equal(initialResumeDraft.skills.labels.tools, "Engineering Signals");
+  assert.ok(initialResumeDraft.skills.tools.includes("Vector PDF export"));
+});
+
 test("resume paper layout plan keeps preview and PDF density decisions shared", () => {
   const draft = structuredClone(initialResumeDraft) as ResumeDraft;
   draft.projects = Array.from({ length: 4 }, (_, index) => ({

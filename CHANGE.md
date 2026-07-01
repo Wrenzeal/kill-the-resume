@@ -550,3 +550,7 @@
 - 升级机会雷达为可操作的求职工作台：后端新增 `job_radar_job_states` 用户岗位状态表、迁移、可选登录态列表状态附加，以及鉴权 `PUT /api/v1/job-radar/jobs/:id/state`；匹配结果新增 score breakdown，前端队列支持状态筛选和收藏/准备投递/已投递/归档/不合适操作。
 - `/job-radar` 三栏信息架构调整为目标画像、岗位优先级队列、岗位决策面板；插件/导入工具收纳到来源工具区，决策面板展示匹配拆分、推荐理由、风险与缺口，匿名用户仍可看公开 feed，登录后才能保存工作流状态。
 - 新增前后端回归测试覆盖登录态岗位列表 Authorization、岗位状态更新 API、score breakdown final 一致性、服务端状态附加与保存；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`npm --prefix web audit --audit-level=moderate`（0 vulnerabilities）、`npm run backend:test`、`npm run backend:build`、`git diff --check`。
+
+- 将简历默认方向升级为技术证据型 Developer Dossier：新增 `identity.highlights` 岗位命中摘要字段，编辑器可维护每行一个证据信号，右侧预览和矢量 PDF 共享 `highlight-line` block 渲染为顶部证据卡片。
+- 默认简历内容从普通模板文案改为 Problem / Decision / Impact 项目叙事，技能默认分类改成 Production、Frontend Systems、Backend/Data、Engineering Signals，减少“普通技能堆砌”的模板感。
+- 新增前端回归测试覆盖旧草稿 highlights 归一化、纸张布局中的证据 block、默认项目/技能证据化文案；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。

@@ -14,6 +14,7 @@ export type ResumeIdentity = {
   location: string;
   website: string;
   summary: string;
+  highlights: string;
   photo: string;
 };
 

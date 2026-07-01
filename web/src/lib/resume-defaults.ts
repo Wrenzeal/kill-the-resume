@@ -11,8 +11,8 @@ export function createProjectExperience(index: number): ProjectExperience {
     role: "Project Owner",
     stack: "TypeScript / Next.js",
     period: createDateRange("2026-01", "", true),
-    signal: "描述项目目标、技术挑战和你的核心贡献。",
-    impact: "补充可量化结果，例如性能、收入、效率或用户增长。",
+    signal: "Problem: 说明项目要解决的业务/工程问题。\nDecision: 说明你做出的关键架构或实现取舍。",
+    impact: "Impact: 补充可量化结果，例如性能、收入、效率或用户增长。",
     status: "stable",
   };
 }
@@ -48,7 +48,8 @@ export const initialResumeDraft: ResumeDraft = {
     email: "you@example.com",
     location: "上海 / 远程",
     website: "https://example.dev",
-    summary: "专注于高性能前端架构、设计系统和数据驱动交互，把复杂产品打造成高效率、强反馈的操作界面。",
+    summary: "把复杂业务产品拆成可维护的数据模型、交互协议和可验证的交付链路，偏好用 TypeScript/Go 构建可长期演进的生产系统。",
+    highlights: "定位：Full-stack Engineer / Go + React + Product Systems\n代表成果：构建 JSON 驱动简历编辑器与矢量 PDF 导出链路\n工程证据：账号系统、PostgreSQL 持久化、插件导入、真实岗位雷达\n匹配方向：后端平台 / 前端基础设施 / 开发者工具",
     photo: "",
   },
   projects: [
@@ -58,8 +59,8 @@ export const initialResumeDraft: ResumeDraft = {
       role: "Lead Interface Engineer",
       stack: "Next.js 16 / TypeScript / Tailwind CSS / Zustand",
       period: createDateRange("2026-01", "", true),
-      signal: "构建 JSON 驱动的战术简历控制台，实现实时 A4 渲染与键盘优先编辑回路。",
-      impact: "把简历制作从文档调格式转化为结构化数据操作，并提供即时版面密度反馈。",
+      signal: "Problem: 传统简历编辑依赖手工排版，结构化数据、实时预览和 PDF 导出经常割裂。\nDecision: 用 Resume JSON 作为唯一数据源，抽象共享纸张布局计划，同时驱动右侧预览和矢量 PDF。",
+      impact: "Impact: 将新增模块、字段显隐、技能分类和照片统一纳入预览/PDF 投影，减少导出错位和内容丢失。",
       status: "stable",
     },
   ],

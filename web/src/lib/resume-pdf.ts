@@ -464,6 +464,46 @@ function addGapBlock(blocks: PdfBlock[], gap: number) {
   });
 }
 
+function addHighlightBlocks(blocks: PdfBlock[], draft: ResumeDraft, t: PdfTranslate) {
+  if (!isResumeFieldVisible(draft, "identity", "highlights")) return;
+  const highlights = normalizePdfText(draft.identity.highlights).split(/\r?\n/).map((line) => safeText(line)).filter(Boolean);
+  if (!highlights.length) return;
+
+  highlights.slice(0, 5).forEach((highlight, highlightIndex) => {
+    const lines = wrapped(highlight, 171, 7.2, "bold", "sans");
+    const lh = lineHeight(7.2, 1.3);
+    lines.forEach((line, lineIndex) => {
+      const isLastLine = lineIndex === lines.length - 1;
+      addFlowBlock(
+        blocks,
+        lh + (isLastLine ? scaled(1.15) : 0),
+        (targetPage, cursor) => {
+          const boxHeight = lh + scaled(0.65);
+          targetPage.drawRectangle({
+            x: mm(pageSize.marginX + layout.borderInset),
+            y: yFromTop(cursor.y + boxHeight - scaled(0.25)),
+            width: mm(171),
+            height: mm(boxHeight),
+            color: color([248, 250, 252]),
+            borderColor: color(theme.light),
+            borderWidth: mm(0.18),
+          });
+          targetPage.drawRectangle({
+            x: mm(pageSize.marginX + layout.borderInset + scaled(1.6)),
+            y: yFromTop(cursor.y + scaled(3.6)),
+            width: mm(scaled(1.4)),
+            height: mm(scaled(1.4)),
+            color: color(activePdfAccent),
+          });
+          textLine(targetPage, line, pageSize.marginX + layout.borderInset + scaled(5.2), cursor.y + scaled(1.2), 7.2, "bold", theme.black, "sans");
+          cursor.y += lh + (isLastLine ? scaled(1.15) : 0);
+        },
+        { includeTitle: highlightIndex === 0 && lineIndex === 0 ? t("preview.highlights") : undefined },
+      );
+    });
+  });
+}
+
 function addSummaryBlock(blocks: PdfBlock[], draft: ResumeDraft, t: PdfTranslate) {
   if (!isResumeFieldVisible(draft, "identity", "summary")) return;
   const summary = safeText(draft.identity.summary) || t("identity.summaryPlaceholder");
@@ -931,7 +971,10 @@ function buildBlocks(draft: ResumeDraft, t: PdfTranslate) {
       continue;
     }
 
-    if (moduleLayout.id === "identity") addSummaryBlock(blocks, draft, t);
+    if (moduleLayout.id === "identity") {
+      addHighlightBlocks(blocks, draft, t);
+      addSummaryBlock(blocks, draft, t);
+    }
     if (moduleLayout.id === "projects") addRepeatableBlocks(blocks, draft, "projects", t("preview.projectExperience"), t, true, activePdfAccent);
     if (moduleLayout.id === "work") addRepeatableBlocks(blocks, draft, "work", t("preview.workHistory"), t, true, activePdfAccent);
     if (moduleLayout.id === "skills") addSkillsBlock(blocks, draft, t);

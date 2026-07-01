@@ -43,6 +43,8 @@ function normalizeResumeDraftBase(draft: ResumeDraft, { forPersistence = false }
     theme: normalizeResumeTheme(draft.theme),
     identity: {
       ...draft.identity,
+      summary: String(draft.identity?.summary ?? ""),
+      highlights: String(draft.identity?.highlights ?? ""),
       photo: String(draft.identity?.photo ?? ""),
     },
     customModules,

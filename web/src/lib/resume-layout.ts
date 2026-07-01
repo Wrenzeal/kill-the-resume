@@ -82,6 +82,7 @@ export const fieldDefinitions: Record<EditorModule, FieldDefinition[]> = {
     { id: "location", labelKey: "identity.location", placeholderKey: "identity.locationPlaceholder" },
     { id: "website", labelKey: "identity.website", placeholderKey: "identity.websitePlaceholder" },
     { id: "summary", labelKey: "identity.summary", placeholderKey: "identity.summaryPlaceholder", minRows: 4 },
+    { id: "highlights", labelKey: "identity.highlights", placeholderKey: "identity.highlightsPlaceholder", minRows: 4 },
   ],
   projects: [
     { id: "codename", labelKey: "project.codename", placeholderKey: "project.codenamePlaceholder" },
