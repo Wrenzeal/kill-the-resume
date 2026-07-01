@@ -9,6 +9,7 @@ import { createResumePaperLayoutPlan, resumePaperMetrics, type PaperBlock } from
 import { getResumeDensity } from "@/lib/resume-metrics";
 import { fieldCaption, isResumeFieldVisible, projectIdentityContact, projectSkillSection } from "@/lib/resume-projection";
 import { splitSkillTags } from "@/lib/skills";
+import { ResumeThemePanel } from "@/components/editor/ResumeThemePanel";
 import { useEditorStore } from "@/store/editor-store";
 import type { ResumeDraft } from "@/types/resume";
 
@@ -528,6 +529,7 @@ export function ResumePreview() {
           <span className={density.level === "stable" ? "text-[var(--cyber-green)]" : "text-[var(--warning-orange)]"}>
             {pageCount === 2 ? t("control.twoPages") : t("control.onePage")} · {t(densityLabelKeys[density.level])} · FIT {Math.round(layoutPlan.densityScale * 100)}%
           </span>
+          <ResumeThemePanel />
           <button
             type="button"
             onClick={() => setLargePreviewOpen(true)}

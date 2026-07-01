@@ -78,8 +78,9 @@ This file is the durable project memory for new Codex conversations. Read it bef
 
 - `/editor` has a three-column, fixed-height tactical layout:
   - left: tactical navigation and module controls;
-  - center: scrollable editing console;
+  - center: scrollable editing console focused on the current resume module only;
   - right: live A4 preview sandbox.
+  Account/cloud resume management is no longer a persistent central panel: `CloudResumeDock` is mounted as a compact trigger in `EditorStatusStrip` and opens a modal dialog for login, save, new, load, delete, and logout. Resume accent color selection is no longer a persistent central panel: `ResumeThemePanel` is mounted in the preview header as a compact theme button/popover because the color only affects paper preview/PDF.
 - The interface follows a dark high-contrast console style with cyber green, warning orange, trace cyan, monospace labels, hard lines, and white A4 paper contrast.
 - Editor shell typography is intentionally larger than the early prototype for readability: navigation buttons are ~13px, hero/body descriptions ~15px, and form inputs ~15-16px; keep A4 resume preview/PDF typography separate unless explicitly changing resume output layout.
 - Language toggle supports Chinese/English and persists user preference in local storage. `LanguageHydrator` runs a rolling browser-tab title based on `meta.title`, syncs `document.documentElement.lang`, `dir`, and the canonical description meta from i18n keys, while removing duplicate description meta nodes that Next/client transitions may leave behind.

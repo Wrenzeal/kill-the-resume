@@ -76,10 +76,13 @@ export function CloudResumeDock() {
   const [password, setPassword] = useState("password8246");
   const [displayName, setDisplayName] = useState("Dev Operator");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [panelOpen, setPanelOpen] = useState(false);
   const autoRefreshedTokenRef = useRef<string | null>(null);
   const restoredSessionRef = useRef<string | null>(null);
 
   const hasCurrentResume = Boolean(currentResumeId);
+  const currentResume = resumes.find((resume) => resume.id === currentResumeId);
+  const cloudStateLabel = status === "busy" ? t("cloud.statusBusy") : status === "error" ? t("cloud.statusError") : user ? t("cloud.statusOnline") : t("cloud.statusOffline");
 
   const handleClearAuth = useCallback(() => {
     clearAuth();
@@ -255,19 +258,42 @@ export function CloudResumeDock() {
   };
 
   return (
-    <section className="tactical-panel p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.36em] text-[var(--trace-cyan)]">{t("cloud.eyebrow")}</p>
-          <h2 className="mt-2 font-mono text-xl font-black uppercase tracking-[-0.04em] text-white">{t("cloud.title")}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            {t("cloud.description")}
-          </p>
-        </div>
-        <div className="border border-[rgba(57,255,136,0.25)] bg-[rgba(57,255,136,0.06)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--cyber-green)]">
-          {status === "busy" ? t("cloud.statusBusy") : status === "error" ? t("cloud.statusError") : user ? t("cloud.statusOnline") : t("cloud.statusOffline")}
-        </div>
-      </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setPanelOpen(true)}
+        className="group flex max-w-[280px] items-center gap-2 border border-[rgba(88,230,255,0.28)] bg-[rgba(88,230,255,0.04)] px-3 py-2 text-left transition hover:bg-[rgba(88,230,255,0.08)] focus-visible:outline-none focus-visible:shadow-[0_0_18px_rgba(88,230,255,0.16)]"
+        data-cloud-resume-trigger
+      >
+        <span className={status === "error" ? "h-2 w-2 shrink-0 bg-[var(--warning-orange)]" : user ? "h-2 w-2 shrink-0 bg-[var(--cyber-green)]" : "h-2 w-2 shrink-0 bg-slate-600"} />
+        <span className="min-w-0">
+          <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">{cloudStateLabel}</span>
+          <span className="block truncate font-mono text-[11px] uppercase tracking-[0.12em] text-slate-300 group-hover:text-[var(--trace-cyan)]">
+            {currentResume?.title ?? user?.email ?? t("cloud.title")}
+          </span>
+        </span>
+      </button>
+
+      {panelOpen ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/72 px-5 py-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t("cloud.title")}>
+          <section className="tactical-panel tactical-scrollbar max-h-[calc(100dvh-4rem)] w-full max-w-5xl overflow-y-auto p-5 shadow-[0_0_48px_rgba(88,230,255,0.14)]" data-cloud-resume-dialog>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.36em] text-[var(--trace-cyan)]">{t("cloud.eyebrow")}</p>
+                <h2 className="mt-2 font-mono text-xl font-black uppercase tracking-[-0.04em] text-white">{t("cloud.title")}</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                  {t("cloud.description")}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="border border-[rgba(57,255,136,0.25)] bg-[rgba(57,255,136,0.06)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--cyber-green)]">
+                  {cloudStateLabel}
+                </div>
+                <button type="button" onClick={() => setPanelOpen(false)} className="border border-[rgba(255,138,61,0.35)] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--warning-orange)] transition hover:bg-[rgba(255,138,61,0.08)]">
+                  {t("cloud.close")}
+                </button>
+              </div>
+            </div>
 
       {!user ? (
         <div className="mt-5 grid gap-3 xl:grid-cols-[1fr_1fr_1fr_auto]">
@@ -359,9 +385,12 @@ export function CloudResumeDock() {
         </div>
       )}
 
-      <div className="mt-4 border-t border-[rgba(125,139,153,0.14)] pt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
-        {message || t("cloud.messageIdle")}
-      </div>
-    </section>
+            <div className="mt-4 border-t border-[rgba(125,139,153,0.14)] pt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              {message || t("cloud.messageIdle")}
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }

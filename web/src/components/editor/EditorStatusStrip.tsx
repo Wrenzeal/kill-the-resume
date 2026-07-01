@@ -4,6 +4,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { LanguageToggle } from "@/components/editor/LanguageToggle";
 import { PreviewToggle } from "@/components/editor/PreviewToggle";
 import { ResumeExportActions } from "@/components/editor/ResumeExportActions";
+import { CloudResumeDock } from "@/components/editor/CloudResumeDock";
 
 export function EditorStatusStrip() {
   const { t } = useI18n();
@@ -31,6 +32,7 @@ export function EditorStatusStrip() {
               </div>
             ))}
           </dl>
+          <CloudResumeDock />
           <PreviewToggle />
           <ResumeExportActions variant="compact" />
           <LanguageToggle compact />

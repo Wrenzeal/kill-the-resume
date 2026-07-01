@@ -566,6 +566,24 @@ test("resume preview source does not vertically scale an already compressed pape
   assert.ok(source.includes("--resume-density-scale"));
 });
 
+
+test("editor global cloud and theme controls move out of the central edit flow", () => {
+  const editorPage = readFileSync(new URL("../src/app/editor/page.tsx", import.meta.url), "utf8");
+  const statusStrip = readFileSync(new URL("../src/components/editor/EditorStatusStrip.tsx", import.meta.url), "utf8");
+  const preview = readFileSync(new URL("../src/components/editor/ResumePreview.tsx", import.meta.url), "utf8");
+  const cloudDock = readFileSync(new URL("../src/components/editor/CloudResumeDock.tsx", import.meta.url), "utf8");
+  const themePanel = readFileSync(new URL("../src/components/editor/ResumeThemePanel.tsx", import.meta.url), "utf8");
+
+  assert.equal(editorPage.includes("<CloudResumeDock"), false);
+  assert.equal(editorPage.includes("<ResumeThemePanel"), false);
+  assert.ok(statusStrip.includes("<CloudResumeDock />"));
+  assert.ok(cloudDock.includes("data-cloud-resume-trigger"));
+  assert.ok(cloudDock.includes("data-cloud-resume-dialog"));
+  assert.ok(preview.includes("<ResumeThemePanel />"));
+  assert.ok(themePanel.includes("data-resume-theme-trigger"));
+  assert.ok(themePanel.includes("data-resume-theme-popover"));
+});
+
 test("resume preview source separates continuous side preview from paged large preview", () => {
   const source = readFileSync(new URL("../src/components/editor/ResumePreview.tsx", import.meta.url), "utf8");
 

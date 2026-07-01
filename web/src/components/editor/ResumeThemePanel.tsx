@@ -1,17 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { cn } from "@/lib/css";
 import { applyCustomAccentColor, applyThemePreset, resumeThemePresets } from "@/lib/resume-theme";
 import { useEditorStore } from "@/store/editor-store";
 
-export function ResumeThemePanel() {
+export function ResumeThemePickerContent() {
   const { t } = useI18n();
   const theme = useEditorStore((state) => state.draft.theme);
   const updateTheme = useEditorStore((state) => state.updateTheme);
 
   return (
-    <section className="tactical-panel overflow-hidden p-5">
+    <section className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[rgba(125,139,153,0.16)] pb-4">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.34em] text-[var(--warning-orange)]">{t("theme.eyebrow")}</p>
@@ -74,5 +75,34 @@ export function ResumeThemePanel() {
         </label>
       </div>
     </section>
+  );
+}
+
+
+export function ResumeThemePanel() {
+  const { t } = useI18n();
+  const theme = useEditorStore((state) => state.draft.theme);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative" data-resume-theme-trigger>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="border border-[rgba(88,230,255,0.36)] px-2 py-1 text-[8px] text-[var(--trace-cyan)] transition hover:bg-[rgba(88,230,255,0.08)] focus-visible:outline-none focus-visible:shadow-[0_0_16px_rgba(88,230,255,0.18)]"
+      >
+        <span className="mr-1 inline-block h-2 w-2 align-[-1px]" style={{ backgroundColor: theme.accentColor }} />
+        {t("theme.title")}
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-40 mt-3 w-[min(520px,82vw)] border border-[rgba(125,139,153,0.22)] bg-[#080c11] p-4 shadow-[0_0_38px_rgba(0,0,0,0.55)]" data-resume-theme-popover>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--warning-orange)]">{t("theme.title")}</p>
+            <button type="button" onClick={() => setOpen(false)} className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500 transition hover:text-[var(--warning-orange)]">{t("theme.close")}</button>
+          </div>
+          <ResumeThemePickerContent />
+        </div>
+      ) : null}
+    </div>
   );
 }

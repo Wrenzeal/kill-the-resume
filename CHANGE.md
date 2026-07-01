@@ -554,3 +554,7 @@
 - 将简历默认方向升级为技术证据型 Developer Dossier：新增 `identity.highlights` 岗位命中摘要字段，编辑器可维护每行一个证据信号，右侧预览和矢量 PDF 共享 `highlight-line` block 渲染为顶部证据卡片。
 - 默认简历内容从普通模板文案改为 Problem / Decision / Impact 项目叙事，技能默认分类改成 Production、Frontend Systems、Backend/Data、Engineering Signals，减少“普通技能堆砌”的模板感。
 - 新增前端回归测试覆盖旧草稿 highlights 归一化、纸张布局中的证据 block、默认项目/技能证据化文案；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
+
+- 重构 `/editor` 全局操作入口：账户云端简历不再作为中央编辑流常驻大面板，而是挂到顶部状态栏的紧凑触发器，点击后打开弹层保留登录/注册、保存、另存、新建默认、刷新、加载、删除和退出能力。
+- 简历主题色不再作为中央编辑流常驻大面板，而是移动到右侧预览标题栏的主题按钮，点击弹出色板/自定义颜色选择；主题数据结构和 `updateTheme` 写入路径保持不变。
+- 新增源码回归测试锁定云端和主题控件的挂载边界；本轮验证通过：`npm --prefix web run test`、`npm --prefix web run typecheck`、`npm --prefix web run lint`、`npm --prefix web run build`、`python3 .codex/skills/project-memory/scripts/memory.py validate`、`git diff --check`。
